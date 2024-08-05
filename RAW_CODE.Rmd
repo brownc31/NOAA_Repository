@@ -1,0 +1,1017 @@
+---
+title: "RAW Data Coding"
+output: pdf_document
+date: "2024-06-12"
+---
+
+```{r}
+#load libraries
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(readxl)
+library(oce)
+library(stringr)
+library(dplyr)
+library(tidyr)
+library(forcats)
+library(janitor)
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+read_btl_DK <- function(filename,
+                        position.identifer = "GPS_Posn",
+                        cruise.identifier = "ReiseNr",
+                        station.identifier = "StationNr",
+                        bottom.identifier = "Echolote") {
+    ## get the data
+    bottle <- readLines(filename)
+    
+    # find header and chop it in strings of 11 character width:
+    fixed.width <- 11
+    header.line <- bottle[grep("Btl_Posn", bottle)]
+    header <- substring(header.line,
+                        seq(1,           nchar(header.line), fixed.width),
+                        seq(fixed.width, nchar(header.line), fixed.width))
+    header <- gsub(" ", "", c(header, "statistic")) # remove whitespaces and add last colname
+    
+    data <- read.fwf(filename,
+                     widths = rep(fixed.width, length(header)),
+                     skip = grep("Btl_Posn", bottle) + 1,
+                     header = F, col.names = header,
+                     stringsAsFactors = FALSE)
+    data$statistic <- gsub(" ", "", data$statistic)
+    
+    # raw.data <- read.table(filename, 
+    #                        sep = "", 
+    #                        dec = ".",  
+    #                        skip = grep("Btl_Posn", bottle)+1, 
+    #                        header = FALSE, 
+    #                        stringsAsFactors = FALSE,
+    #                        fill = TRUE, # one or more files have "samples per bin" values missing, this fills the blanks
+    #                        na.strings = c("", "NA") # defines values as NA
+    # ) 
+    
+    # data <- as.data.frame( # return as a dataframe
+    #   t( # transpose
+    #     apply(raw.data, # apply function to this object
+    #           1, # apply function across rows in the object
+    #           function(x) c( # combine the two vectors into one
+    #             rep(NA, sum(is.na(x))), # repeat NA as often as it occurs at the end of the row
+    #             x[1:(length(x)-sum(is.na(x)))] # take from the line the entries from the first to the last that is not NA (NAs are always at the end)
+    #           ) 
+    #     )
+    #   )
+    # )
+    
+    #data <- data[,(max(rowSums(is.na(data)))+1):ncol(data)] # remove rows in the front that contain meta data or NA
+    
+    # get the column names for the data table
+    #column.names <- bottle[grep("Btl_Posn", bottle)] # return the line with the column names but in one string with multiple whitespaces
+    #column.names <- scan(text = column.names, what = "") # read the single string into a vector of strings by multiple whitespaces ("")
+    #if(any(grepl("FlECO-AFLTurbWETntu0", column.names))) { # test if x is a part of y; in the .btl ther is nos space between the two parameters
+    #    column.names <- scan(text = gsub("FlECO-AFLTurbWETntu0", "FlECO-AFL TurbWETntu0", column.names), what = "") # replace "FlECO-AFLTurbWETntu0" with "FlECO-AFL TurbWETntu0" and separate it by ""
+    #} 
+    #column.names <- column.names[3:length(column.names)] # remove the first two entries int column names, i.e. Btl_Posn and Date
+    
+    #names(data) <- column.names
+    #names(data)[ncol(data)] <- "statistic" # this column is not named
+    
+    ## get metadata 
+    # bottle position and ID
+    reps <- length(unique(data$statistic)) # number of entries per bottle
+    Btl_Posns <- data[,1]
+    Btl_Posn <- Btl_Posns[seq(from = 1, to = length(Btl_Posns), by = reps)] # from first colum on raw data take the first entry per bottle
+    Btl_IDs <- data[,1]
+    Btl_ID <- Btl_IDs[seq(from = 2, to = length(Btl_IDs), by = reps)] # from first colum on raw data take the first entry per bottle
+    
+    data$Btl_Posn <- rep(Btl_Posn, each = reps)
+    data$Btl_ID <- rep(Btl_ID, each = reps)
+    
+    # bottle data and time
+    times <- data[,2]
+    time <- times[seq(from = 2, to = length(times), by = reps)]
+    dates <- data[,2]
+    date <- dates[seq(from = 1, to = length(dates), by = reps)]
+    timestamp <- paste(date, time)
+    # day <- raw.data[,3]
+    # day <- day[seq(from = 1, to = length(day), by = reps)]
+    # year <- raw.data[,4]
+    # year <- year[seq(from = 1, to = length(year), by = reps)]
+    # time <- paste(year,month,day,time, sep = " ")
+    
+    data$Date <- rep(timestamp, each = reps)
+    #data$time <- strptime(data$time, format = "%Y %b %e %H:$M:%", tz = "UTC") # eg 2014 Dec 6 09:11:53
+    
+    # geographic location
+    position <- bottle[grep(position.identifer, bottle)]
+    pos.regex <- ".*= ([-1234567890]*) ([1234567890.]*)([NS]) ([-1234567890]*) ([1234567890.]*)([EW]).*" # defines text to be replaced; in this case as regular expression (i.e. could be any text that fits into this pattern)
+    latdeg <- as.numeric(sub(pos.regex, 
+                             "\\1", # defines which of the "packages" that have been defined in the brackets is used as substitute
+                             position))
+    latmin <- as.numeric(sub(pos.regex, "\\2", position))
+    latdec <- latdeg+latmin/60
+    latdir <- sub(pos.regex, "\\3", position)
+    longdeg <- as.numeric(sub(pos.regex, "\\4", position))
+    longmin <- as.numeric(sub(pos.regex, "\\5", position))
+    longdec <- longdeg+longmin/60
+    longdir <- sub(pos.regex, "\\6", position)
+    
+    #data$longitude <- longdec
+    #names(data)[names(data)=="longitude"] <- paste("longitude.deg", longdir, sep = "")
+    #data$latitude <- latdec
+    #names(data)[names(data)=="latitude"] <- paste("latitude.deg", latdir, sep = "")
+    
+    # cruise name and station number
+    cruise <- bottle[grep(cruise.identifier, bottle)] # get text line containing cruise identifier
+    cruise <- sub(".*= (.*)$", "\\1", cruise) # extract cruise name
+    station <- bottle[grep(station.identifier, bottle)] # get text line containing station identifier
+    station <- sub(".*= (.*)$", "\\1", station) 
+    
+    # station depth (from echo sounding)
+    bottom <- bottle[grep(bottom.identifier, bottle)] # get text line containing cruise identifier
+    bottom.m <- sub(".*= (.*) m$", "\\1", bottom) # extract cruise name
+    
+    # filename
+    #data$filename <- filename  
+    
+    return(data)
+}
+```
+
+```{r}
+
+raw_wcoa7 <- tibble()
+
+for (i in seq(1, 133, by = 1)){
+  
+  if (i < 10){
+    i <- str_glue("00{i}")
+  }
+  else if (i < 100){
+    i <- str_glue("0{i}")
+  }
+  if (i == 132){
+    file <- read.ctd.sbe(str_glue("~/Desktop/NOAA/NOAA Work/West Coast/WCOA-7/CTD_Data/RB2102_CTD_{i}_02.btl"), btl = TRUE, deploymentType = "profile")@data
+  }
+  
+  else{
+  
+file <- read.ctd.sbe(str_glue("~/Desktop/NOAA/NOAA Work/West Coast/WCOA-7/CTD_Data/RB2102_CTD_{i}_01.btl"), btl = TRUE, deploymentType = "profile")@data
+}
+
+  file <- file %>% 
+    mutate(Station = as.numeric(i))
+  
+raw_wcoa7 <- rbind(raw_wcoa7, file)
+}
+```
+
+
+```{r}
+raw_wcoa7 <- raw_wcoa7 %>% 
+  mutate(raw_oxygen = (Sbox0Mm.Kg + Sbox1Mm.Kg) / 2) %>% 
+  mutate(ctdprs = round(PrDM, 1))
+```
+
+
+```{r}
+wcoa7_corrected <- read_excel("~/Desktop/NOAA/NOAA Work/West Coast/WCOA-7/WCOA2021_Data_forSDIS_2022_09-28.xlsx") %>% 
+  slice(-1) %>% 
+  janitor::clean_names() %>% 
+  rename(Station = station_id, ctdprs = ctdpres, oxygen = oxygen_djg, oxy = oxygen, ctdtmp = ctdtemp_its90, ctdsal = ctdsal_pss78, 
+         Bottle = rosette_position, Cast = cast_number) %>% 
+  mutate(date = dmy(str_glue("{day_utc}, {month_utc}, {year_utc}"))) %>%  
+         mutate(across(4:69, as.numeric)) %>% 
+   mutate(depth_change = ctdprs - lag(ctdprs, n = 1)) %>% 
+  filter(depth_change != 0)
+```
+
+```{r}
+joined_wcoa7 <- full_join(raw_wcoa7, wcoa7_corrected, by = c("Bottle", "Station")) %>% 
+  rename(ctdprs = ctdprs.x) %>% 
+  mutate(oxygen = ifelse(oxygen < 0, NA, oxygen)) %>% 
+  mutate(corrected_diff = abs(ctdoxy - oxygen), uncorrected_diff = abs(raw_oxygen - oxygen), cruise = rep("WCOA 2021", n())) %>% 
+  dplyr::select(raw_oxygen, ctdtmp, ctdprs, ctdsal, oxygen, ctdoxy, Station, latitude, longitude, cruise) %>% 
+  drop_na(oxygen, ctdoxy, raw_oxygen) 
+```
+
+
+--------------------------------------------------------------------------------
+
+**GOMECC-4**
+
+```{r}
+find_coord <- function(lines){
+    # pattern definition:
+    lat_pattern <- "^\\*.* ([0-9]*\\s[0-9]*\\.[0-9]*\\s?[NS]).*"
+    lon_pattern <- "^\\*.* ([0-9]*\\s[0-9]*\\.[0-9]*\\s?[EW]).*"
+    # extract first line, that matches pattern:
+    lat_idx <- grep(lat_pattern, x = lines)[1]
+    lon_idx <- grep(lon_pattern, x = lines)[1]
+    # extract coordinates:
+    lat <- sub(lat_pattern, "\\1", lines[lat_idx])
+    lon <- sub(lon_pattern, "\\1", lines[lon_idx])
+    # return coordinates:
+    return(list("Lat" = lat, "Lon" = lon))
+}
+
+read.cnv.file <- function(filename){ #  filename as character string (e.g. "V0033F01.cnv")
+    cnv.file <- readLines(filename, encoding = "latin1") #  reads the file as large character string
+    # substitute terrible would-be-NA-values with less terrible would-be-NA-values:
+    bad.flag <- sub(".*= (.*)$", "\\1", cnv.file[grep("bad_flag", cnv.file)])
+    cnv.file <- gsub(bad.flag, " NA ", cnv.file)
+    
+    metadata <- cnv.file[grep("** ", cnv.file, fixed = TRUE)] %>%
+        str_remove_all("\\*") %>% str_squish()
+    
+    latlon <- find_coord(cnv.file)
+    
+    # cruise       <- sub(".*=(.*)", "\\1",cnv.file[grep("ReiseNr", cnv.file)])
+    # station      <- sub(".*=(.*)", "\\1",cnv.file[grep("StationNr", cnv.file)])
+    # cast         <- sub(".*=(.*)", "\\1",cnv.file[grep("EinsatzNr", cnv.file)])
+    # serie        <- sub(".*=(.*)", "\\1",cnv.file[grep("SerieNr", cnv.file)])
+    # name         <- sub(".*=(.*)", "\\1",cnv.file[grep("StatBez", cnv.file)])
+    # timestamp    <- sub(".*=(.*)", "\\1",cnv.file[grep("Startzeit", cnv.file)])
+    # bottom.depth <- sub(".* ([0-9.]*) .*$", "\\1", cnv.file[grep("Echolote", cnv.file)])
+    
+    header.definition.list <- as.list(cnv.file)[grep("# name", cnv.file)] #  find column definitions in the header, store as list
+    header.definition.df   <- data.frame( #  write column names and description in data.frame
+        colnames  = sub('.*= (.*):(.*)', '\\1', header.definition.list),
+        longnames = sub('.*= (.*):(.*)', '\\2', header.definition.list))
+    
+    header.end.position <- grep("*END*", cnv.file) #  find string '*END*' in cnv-file that marks the end of the header, thus the beginning of the data table
+    
+    # extract longitude and latitude from header - not all SBE cnv's contain columns with lon and lat
+    # position <- cnv.file[grep("GPS_Posn", cnv.file)]
+    # pos.regexp <- ".*= ([-1234567890]*) ([1234567890.]*)[NS] ([-1234567890]*) ([1234567890.]*)[EW].*"
+    # latdeg <- as.numeric(sub(pos.regexp, "\\1", position))
+    # latmin <- as.numeric(sub(pos.regexp, "\\2", position))
+    # latdec <- latdeg + latmin / 60
+    # longdeg <- as.numeric(sub(pos.regexp, "\\3", position))
+    # longmin <- as.numeric(sub(pos.regexp, "\\4", position))
+    # longdec <- longdeg + longmin / 60
+    
+    # read data table ...
+    if(length(cnv.file) > header.end.position){
+        data.frame <- read.table(text = cnv.file, #  ... from given filname ...
+                                 na.strings = c("NA"),
+                                 sep="", #  ... with whitespaces as column separator ...
+                                 dec=".", #  ... and '.' as decimal point
+                                 skip=header.end.position, #  ... skipping the header ...
+                                 col.names = header.definition.df$colnames, # ... and using the extracted column definitions as column names for the created data.frame. 
+                                 row.names = NULL,
+                                 stringsAsFactors = FALSE) 
+        
+        # add longitude and latitude from header as new columns
+        # data.frame$header.latitude <- latdec
+        # data.frame$header.longitude <- longdec
+        
+        return(list("data" = data.frame, # the function finally returns the data.frame ...
+                    "coords" = latlon,   # the extracted coordinates ...
+                    "meta" = metadata))} #  ... and the metadata
+    else{warning("cnv-file seems to contain no measurement data!")
+        return(NULL)}}
+```
+
+
+```{r}
+raw_gom4 <- tibble()
+for (i in seq(1, 1411, by = 10)){
+  try({
+  
+  if (i < 10){
+    i <- str_glue("000{i}")
+  }
+  else if (i < 100){
+    i <- str_glue("00{i}")
+  }
+  else if(i < 1000){
+    i <- str_glue("0{i}")
+  }
+  
+file <- read.cnv.file(str_glue("~/Desktop/NOAA/NOAA Work/Gulf of Mexico/GOMECC-4/1db/drb2103_{i}.cnv"))$data
+
+file <- file %>% 
+  mutate(Station = as.numeric(str_replace(i, "1\\b", "")))
+
+raw_gom4 <- rbind(raw_gom4, file)
+})
+}
+```
+
+```{r}
+raw_gom4 <- raw_gom4 %>% 
+  rename(ctdprs = prDM) %>% 
+  mutate(raw_oxygen = ((sbox0Mm.Kg + sbox1Mm.Kg) / 2), latitude = round(latitude, 1), longitude = round(longitude, 1))
+```
+
+
+```{r}
+gom4_corrected <- read_excel("~/Desktop/NOAA/NOAA Work/Gulf of Mexico/GOMECC-4/GOMECC-4_versionJan2024.xlsx") %>% 
+  slice(-1) %>% 
+  janitor::clean_names() %>% 
+  mutate(date = dmy(str_glue("{day_utc}, {month_utc}, {year_utc}"))) %>%
+  rename(Station = station_id, ctdprs = ctdpres, ctdsal = ctdsal_pss78, ctdtmp = ctdtmp_its90, Bottle = niskin_id) %>% 
+  mutate(across(5:52, as.numeric)) %>%
+  mutate(ctdprs = round(ctdprs, 0), latitude = round(latitude, 1), longitude = round(longitude, 1)) %>% 
+  mutate(depth_change = ctdprs - lag(ctdprs, n = 1)) %>% 
+  filter(depth_change != 0)
+```
+
+
+```{r}
+joined_gom4 <- left_join(raw_gom4, gom4_corrected, by = c("ctdprs", "Station", "latitude", "longitude")) %>% 
+  mutate(oxygen = ifelse(oxygen < 0, NA, oxygen)) %>% 
+  mutate(corrected_diff = abs(ctdoxy - oxygen), uncorrected_diff = abs(raw_oxygen - oxygen), cruise = rep("GOMECC 2021", n())) %>% 
+  dplyr::select(raw_oxygen, ctdtmp, ctdprs, ctdsal, oxygen, ctdoxy, Station, latitude, longitude, cruise) %>% 
+  drop_na(oxygen, ctdoxy, raw_oxygen) 
+```
+
+--------------------------------------------------------------------------------
+**ECOA1**
+
+```{r, results = 'hide'}
+ecoa3_raw <- read_excel("~/Desktop/NOAA/NOAA Work/East Coast/ECOA-3/ECOA3_CTD_Colin_Brown.xlsx") %>% 
+  mutate(raw_oxygen = (Oxygen_umol_kg_1 + Oxygen_umol_kg_2) / 2, latitude = round(latitude, 1), longitude = round(longitude, 1)) %>% 
+  rename(ctdprs2 = Depth_m, Station = station) %>% 
+  drop_na(Station)
+```
+
+```{r}
+ecoa3_corrected <- read_excel("~/Desktop/NOAA/NOAA Work/East Coast/ECOA-3/ECOA_3_CTD_MasterDataSheet_09_26_2023.xlsx") %>% 
+   slice(-1)
+
+ecoa3_corrected <- ecoa3_corrected %>% 
+  janitor::clean_names() %>% 
+  mutate(date = dmy(str_glue("{day_utc}, {month_utc}, {year_utc}"))) %>% 
+  rename(Station = station_id,  Bottle = niskin_id, ctdprs = depth, ctdtmp = ctdtemp_its90, ctdsal = ctdsal_pss78) %>% 
+  mutate(across(3:43, as.numeric)) %>% 
+  mutate(ctdprs2 = round(ctdprs, 0), latitude = round(latitude, 1), longitude = round(longitude, 1)) %>% 
+   mutate(depth_change = ctdprs - lag(ctdprs, n = 1)) %>% 
+  filter(depth_change != 0)
+```
+
+```{r}
+joined_ecoa3 <- left_join(ecoa3_raw, ecoa3_corrected, by = c("Station", "ctdprs2", "latitude", "longitude")) %>% 
+  mutate(oxygen = ifelse(oxygen < 0, NA, oxygen)) %>% 
+  mutate(corrected_diff = abs(ctdoxy - oxygen), uncorrected_diff = abs(raw_oxygen - oxygen), cruise = rep("ECOA 2022", n())) %>% 
+  dplyr::select(raw_oxygen, ctdtmp, ctdprs, ctdsal, oxygen, ctdoxy, Station, latitude, longitude, cruise) %>% 
+  drop_na(oxygen, ctdoxy, raw_oxygen) 
+```
+
+--------------------------------------------------------------------------------
+**Combining data**
+
+```{r}
+big_data <- rbind(joined_ecoa3, joined_gom4, joined_wcoa7) %>% 
+  group_by(Station, cruise) %>% 
+  mutate(max_depth = max(ctdprs)) %>% 
+  ungroup() %>% 
+  mutate(max_depth_bin = case_when( max_depth > 2000 & max_depth <= 6000 ~ cut(max_depth, seq(2000, 6000, by = 2000), 
+                                                                          labels = c("2001-4000", "4001-6000")), 
+                                    
+                                    max_depth > 500 & max_depth <= 2000 ~ cut(max_depth, seq(500, 2000, by = 500), 
+                                                                          labels = c("501-1000", "1001-1500", "1501-2000")), 
+                                    
+                                    max_depth > 100 & max_depth <= 500 ~ cut(max_depth, seq(100, 500, by = 200), 
+                                                                          labels = c("101-300", "301-500")), 
+                                    
+                                    max_depth <= 100 ~ cut(max_depth, seq(0, 100, by = 50), 
+                                                                          labels = c("1-50", "51-100")), 
+                                    
+                                    TRUE ~ NA_character_ )) %>%
+  
+  mutate(max_depth_bin = fct_relevel(max_depth_bin, "1-50", "51-100", "101-300", "301-500", "501-1000", "1001-1500", "1501-2000", "2001-4000", "4001-6000")) %>%
+  
+  #make ctdprs bins
+  mutate(ctdprs_bin = case_when( ctdprs > 2000 & ctdprs <= 6000 ~ cut(ctdprs, seq(2000, 6000, by = 2000), 
+                                                                          labels = c("2001-4000", "4001-6000")), 
+                                    
+                                    ctdprs > 500 & ctdprs <= 2000 ~ cut(ctdprs, seq(500, 2000, by = 500), 
+                                                                          labels = c("501-1000", "1001-1500", "1501-2000")), 
+                                    
+                                    ctdprs > 100 & ctdprs <= 500 ~ cut(ctdprs, seq(100, 500, by = 200), 
+                                                                          labels = c("101-300", "301-500")), 
+                                    
+                                    ctdprs <= 100 ~ cut(ctdprs, seq(0, 100, by = 50), 
+                                                                          labels = c("1-50", "51-100")), 
+                                    
+                                    TRUE ~ NA_character_ )) %>%
+  
+  mutate(ctdprs_bin = fct_relevel(ctdprs_bin, "1-50", "51-100", "101-300", "301-500", "501-1000", "1001-1500", "1501-2000", "2001-4000", "4001-6000")) %>% 
+  
+  #make oceanographic region variables
+  mutate(region = ifelse(latitude >= 41.75 & longitude >= -71, "Cape Cod to Nova Scotia", "x")) %>%  
+  mutate(region = ifelse(latitude >= 35.25 & latitude < 41.75 & longitude >= -77, "Mid NC to Cape Cod", region)) %>% 
+  mutate(region = ifelse(latitude >= 24.5 & latitude < 35.25 & longitude >= -81.5, "FL Tip to Mid NC", region)) %>% 
+  mutate(region = ifelse(latitude >= 48.5 & longitude <= -122.75, "West Canada", region)) %>% 
+  mutate(region = ifelse(latitude >= 42 & latitude < 48.5 & longitude <= -122, "OR & WA", region)) %>%
+  mutate(region = ifelse(latitude >= 34.5 & latitude < 42 & longitude <= -120.5, "Point Conception to OR", region)) %>%
+  mutate(region = ifelse(latitude < 34.5 & longitude <= -105, "South of Point Conception", region)) %>% 
+  mutate(region = ifelse(latitude <= 31 & latitude >= 28 & longitude >= -91 & longitude <= -87, "Mississippi River Outlet", region)) %>%
+  mutate(region = ifelse(latitude <= 31 & latitude >= 26 & longitude >= -98 & longitude <= -81.5 & region != "Mississippi River Outlet", "Upper Gulf", region)) %>%
+  mutate(region = ifelse(latitude < 26 & latitude >= 18 & longitude >= -98 & longitude <= -80, "Lower Gulf", region))
+
+write_csv(big_data, "~/Desktop/NOAA/NOAA Work/Shiny Data/big_data.csv")
+```
+
+--------------------------------------------------------------------------------
+How does the raw CTD data change from the titration data?
+
+```{r}
+joined_wcoa7 %>% 
+  filter(Station == 108) %>% 
+ggplot() +
+  geom_point(aes(x = raw_oxygen, y = ctdprs), color  = "darkblue") +
+  geom_path(aes(x = raw_oxygen, y = ctdprs), color  = "darkblue") +
+  geom_point(aes(x = oxygen, y = ctdprs), color = "red") +
+  geom_path(aes(x = oxygen, y = ctdprs), color = "red") +
+  scale_y_reverse() + 
+  labs(title = "CTD Profile (Blue) Vs Titration Profile (Red)", x = "Oxygen (umol/kg)", y = "Depth (m)", caption = "WCOA 2021, Station 108")
+```
+
+```{r}
+big_data %>% 
+  group_by(cruise) %>% 
+  summarize(mean_diff_pct = mean(abs((raw_oxygen - oxygen) / oxygen)), mean_diff_umolkg = mean(abs(raw_oxygen - oxygen)))
+```
+
+
+--------------------------------------------------------------------------------
+How do oxygen profiles change based on location?
+
+```{r}
+ggplot() +
+ geom_point(data = big_data, aes(x = oxygen, y = ctdprs, color = cruise)) +
+ #geom_smooth(data = big_data, aes(x = oxygen, y = ctdprs, color = cruise), se = FALSE, orientation = "y") +
+ scale_y_reverse() +
+ labs(title = "Oxygen Levels based on Depth and Location", y = "Depth (m)", x = "Oxygen (umol/kg)")
+```
+
+--------------------------------------------------------------------------------
+
+**Replacing Calibrated Data with Raw Data**
+
+```{r}
+set.seed(12030)
+replacements <- function(calibration_data, raw_data, threshold) {
+ 
+  replaceable <- 0
+  
+  
+  for (i in 1:length(calibration_data)) {
+    new_data <- calibration_data
+    index <- sample(1:length(calibration_data), i)
+    new_data[index] <- raw_data[index]
+    
+    if (mean(abs((new_data - calibration_data) / calibration_data)) <= threshold) {
+      replaceable <- replaceable + 1
+      
+    }
+    
+  }
+  
+  return(replaceable)
+}
+```
+
+```{r}
+set.seed(12030)
+big_data2 <- big_data %>% 
+    mutate(raw_oxy_change = raw_oxygen - lag(raw_oxygen, n = 1)) %>% 
+  filter(raw_oxy_change != 0) %>% 
+  dplyr::select(!raw_oxy_change) %>% 
+  group_by(Station, cruise) %>% 
+  mutate(replaceables = replacements(ctdoxy, raw_oxygen, 0.01)) %>% 
+  mutate(percent_replaceable = replaceables / n(), samples = n()) %>% 
+  ungroup() %>% 
+  arrange(desc(samples)) %>% 
+  slice(-c(20:37)) %>% 
+  arrange(cruise, Station)
+  
+
+big_data2 %>% 
+  group_by(cruise) %>% 
+  summarize(mean = mean(percent_replaceable), sd = sd(percent_replaceable), lq = quantile(percent_replaceable, 0.025), uq = quantile(percent_replaceable, 0.975))
+
+#On average, 35% of samples can be replaced, 95% of the data spans the whole range
+```
+
+```{r}
+ggplot(data = big_data2, aes(x = percent_replaceable, y = cruise)) +
+  geom_boxplot() + 
+  labs(title = "Percent Removable Samples by Cruise", x = "% Removable", y = "Cruise")
+
+ggplot(data = big_data2, aes(x = percent_replaceable)) +
+  geom_histogram(binwidth = .05) +
+  labs(title = "Distribution of the Removability of Profiles", y = "Number of Profiles", x = "% Removable")
+```
+
+```{r}
+set.seed(3421)
+#creates profiles made under randomization process
+big_data2 <- big_data2 %>% 
+  mutate(random_choices = runif(n()) < percent_replaceable) %>% 
+  mutate(new_profile = ifelse(random_choices, raw_oxygen, ctdoxy))
+```
+
+```{r}
+filtered_data <- big_data2 %>% 
+  filter(cruise == "ECOA 2022" & Station == 149)
+filtered_data$new_profile[2] <- 208.0955
+filtered_data$new_profile[1] <- 207.4550
+
+ggplot() +
+ #geom_point(data = filtered_data, aes(x = raw_oxygen, y = ctdprs), orientation = "y") +
+ #geom_path(data = filtered_data, aes(x = raw_oxygen, y = ctdprs), color = "black", se = FALSE, orientation = "y") +
+geom_point(data = filtered_data, aes(x = new_profile, y = ctdprs), color = "red", alpha = 0.5, orientation = "y") +
+ geom_path(data = filtered_data, aes(x = new_profile, y = ctdprs), color = "red", se = FALSE, orientation = "y") +
+   geom_point(data = filtered_data, aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "blue", alpha = 0.5) +
+ geom_path(data = filtered_data, aes(x = ctdoxy, y = ctdprs), color = "blue", se = FALSE, orientation = "y", alpha = 0.5) +
+  #geom_point(data = filtered_data, aes(x = oxygen, y = ctdprs), color = "green") +
+  #geom_path(data = filtered_data, aes(x = oxygen, y = ctdprs), color = "green") +
+  scale_y_reverse() +
+  xlim(205, 215) +
+  labs(title = "Replaced Profile (Red) vs Calibrated Profile (Blue)", y = "depth (m)", x = "oxygen (umol/kg)", caption = "Cruise ECOA 2022, site 128")
+```
+
+--------------------------------------------------------------------------------
+What are the odds of omitting one sample from each profile and having a similar profile if you sample x times? 
+
+```{r}
+set.seed(23)
+#for each sample replacement # (for loop) put the sample number in one column of a df, and calculate the odds 
+#assuming the number of samples taken was more or equal to the number of sample replacements (if statement)
+df <- data.frame(odds = double(),
+                    potential_sample_replacements = integer())
+for (i in 1:24) {
+  res <- big_data2 %>% 
+    group_by(cruise, Station) %>% 
+    mutate(count = n()) %>% 
+    ungroup() %>% 
+    filter(count >= 20) %>% #there is only one site that took 24 samples
+    filter(ctdprs > 1000) %>% #lessen variation
+    summarize(odds = sum(replaceables >= i)/n())
+  
+  df <- rbind(df, data.frame(odds = res$odds, potential_sample_replacements = i))
+  
+  }
+#result should be a dataframe with odds and samples 1 through the maximum possible
+
+ggplot(data = df, aes(x = potential_sample_replacements, y = odds)) +
+  geom_path() +
+  geom_point() +
+  ylim(c(0, 1.05)) +
+  labs(title = "Probability of Reliably Replacing one Randomly Chosen Titration with CTD data", 
+       x = "Number of Potential Sample Replacements", 
+       y = "Odds")
+```
+
+No need to take more than 20 samples
+
+--------------------------------------------------------------------------------
+
+What proportion of profiles cannot be replaced by any CTD data?
+
+4.3% & see chart
+
+What proportion of profiles are completely replaceable by CTD data? 
+
+5.3% & see chart
+
+Maybe do distribution graph from above but per region/cruise
+```{r}
+big_data2 %>% 
+  summarize(prop = sum(percent_replaceable == 1)/n()) #can be changed to 1 for completely replaceable
+
+big_data2 %>% 
+  mutate(region = fct_relevel(region, c("Lower Gulf", "Upper Gulf", "Mississippi River Outlet", "FL Tip to Mid NC", "Mid NC to Cape Cod", "Cape Cod to Nova Scotia", "West Canada", "OR & WA", "Point Conception to OR", "South of Point Conception"))) %>% 
+  filter(max_depth >= 100) %>% 
+  group_by(region) %>% 
+  summarize(prop_replaceable = sum(percent_replaceable == 1)/n(), prop_unreplaceable = sum(percent_replaceable == 0)/n()) %>% 
+  pivot_longer(cols = -region,
+               names_to = "Replaceable?") %>% 
+  mutate(`Replaceable?` = fct_recode(`Replaceable?`,
+                                     "Replaceable" = "prop_replaceable",
+                                     "Unreplaceable" = "prop_unreplaceable")) %>% 
+  ggplot(aes(x = region, y = value, fill = `Replaceable?`)) +
+    geom_col(position = "dodge") +
+    scale_fill_manual(values = c("Replaceable" = "darkblue", "Unreplaceable" = "darkred")) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(title = "Percentage of Profiles That are Completely Replaceable or \n Completely Unreplaceable by CTD Data (> 100m)", y = "Proportion", x = "Region")
+```
+
+--------------------------------------------------------------------------------
+
+Does CTD data get less accurate at larger depths? --> by cruise/region probably
+
+```{r}
+ctdprs_diff_graph <- big_data2 %>% 
+ # filter(cruise == "ECOA 2022") %>% 
+  mutate(oxydiff_pct = 100 * abs((raw_oxygen - oxygen)/oxygen))
+
+ggplot(ctdprs_diff_graph, aes(x = ctdprs_bin, y = oxydiff_pct)) +
+  geom_boxplot() +
+  #geom_errorbar(aes(ymin = mean_diff - sd, ymax = mean_diff + sd)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_y_continuous(breaks = seq(0, 100, 20), limit = c(0, 100)) +
+  labs(title = "Mean Difference Between CTD Data and Titration Data for Depth Groups", x = "Depth Bin (meters)", y = "% Diff")
+```
+
+--------------------------------------------------------------------------------
+
+Where is CTD data more / less accurate?
+
+```{r}
+cruise_diff_graph <- big_data2 %>% 
+  group_by(cruise) %>% 
+  summarize(mean_diff = mean(abs(raw_oxygen - oxygen), na.rm = TRUE), 
+            sd = sd(abs(raw_oxygen - oxygen)), 
+            mean_percent_diff = mean(abs(raw_oxygen - oxygen)/((raw_oxygen + oxygen)/2)*100, na.rm = TRUE))
+
+cruise_diff_graph$cruise <- reorder(cruise_diff_graph$cruise, cruise_diff_graph$mean_percent_diff)
+ggplot(cruise_diff_graph, aes(x = cruise, y = mean_percent_diff)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = mean_diff - sd, ymax = mean_diff + sd)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Mean Difference Between CTD Data and Titration Data for Cruises", x = "Cruise", y = "% Diff")
+
+region_diff_graph <- big_data2 %>% 
+  group_by(region) %>% 
+  summarize(mean_diff = mean(abs(raw_oxygen - oxygen), na.rm = TRUE), 
+            sd = sd(abs(raw_oxygen - oxygen)), 
+            mean_percent_diff = mean(abs(raw_oxygen - oxygen)/((raw_oxygen + oxygen)/2)*100, na.rm = TRUE))
+
+region_diff_graph$region <- reorder(region_diff_graph$region, region_diff_graph$mean_percent_diff)
+ggplot(region_diff_graph, aes(x = region, y = mean_percent_diff)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = mean_diff - sd, ymax = mean_diff + sd)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Mean Difference Between CTD Data and Titration Data for Regions", x = "Oceanographic Region", y = "% Diff")
+```
+
+--------------------------------------------------------------------------------
+
+**Mapping** THURSDAY COLIN START HERE
+
+```{r}
+library(leaflet)
+library(sp)
+library(htmlwidgets)
+library(readr)
+```
+
+```{r}
+#round lat and long down to a whole lat or long
+rounded_data <- big_data2 %>% 
+  mutate(latitude = 2* round(latitude / 2), longitude = 2 * round(longitude / 2), station_change = ifelse(Station - lag(Station, n = 1) != 0, 1, 0)) %>% 
+  group_by(latitude, longitude) %>% 
+  summarize(mean_percent_replaceable = mean(percent_replaceable), sample_size = n(), sd_replaceable = sd(percent_replaceable),
+            low_oxy_depth = median(median(ifelse(oxygen == min(oxygen), ctdprs, NA), na.rm = TRUE)), 
+            low_oxy_depth_prop = median(low_oxy_depth / max_depth), mean_max_depth = mean(max_depth),
+            number_replacements = mean(replaceables), sd_num = sd(replaceables), site_samples = mean(samples),
+            lb = 100 * quantile(percent_replaceable, 0.05), num_lb = quantile(replaceables, 0.05), min_pct_replaceable = min(percent_replaceable), max_pct_replaceable = max(percent_replaceable),
+            number_of_stations = sum(station_change))
+rounded_data$number_of_stations[73] <- 1
+
+write_csv(rounded_data, "~/Desktop/NOAA/NOAA Work/Shiny Data/rounded_data.csv")
+```
+
+```{r}
+#define range of latitudes and longitudes
+lat_range <- seq(min(rounded_data$latitude), max(rounded_data$latitude), by = 2)
+lon_range <- seq(min(rounded_data$longitude), max(rounded_data$longitude), by = 2)
+
+#initialize an empty list to store polygons
+polygons <- list()
+
+#create polygons
+for (lat in lat_range) {
+  for (lon in lon_range) {
+    if(any(rounded_data$latitude == lat & rounded_data$longitude == lon)) {
+    #define the coordinates of the corners of the polygon
+    coords <- matrix(c(lon - 1, lat - 1,
+                       lon + 1, lat - 1,
+                       lon + 1, lat + 1,
+                       lon - 1, lat + 1,
+                       lon - 1, lat - 1),
+                     ncol = 2, byrow = TRUE)
+    #create a polygon and add it to the list
+    polygons <- c(polygons, list(Polygons(list(Polygon(coords)), ID = paste(lat, lon))))
+    }
+    
+    else {
+      
+    }
+  }
+}
+
+#create a SpatialPolygons object
+sp_polygons <- SpatialPolygons(polygons)
+```
+
+```{r}
+rounded_data <- read_csv("~/Desktop/NOAA/NOAA Work/Shiny Data/rounded_data.csv")
+```
+
+
+```{r}
+#run code for formula without adjustments
+rounded_data <- rounded_data %>% 
+ mutate(ID = paste(latitude, longitude), mean_pct_replaceable = 100* mean_percent_replaceable, sd = 100 * sd_replaceable, 
+        suggested_samples = ifelse((site_samples - ((mean_percent_replaceable)*site_samples)) > 20, 20, site_samples - ((mean_percent_replaceable)*site_samples)),
+        suggested_samples = ifelse((site_samples - ((mean_percent_replaceable)*site_samples)) < 3, 3, site_samples - ((mean_percent_replaceable)*site_samples)),
+        min_suggested = ifelse(site_samples - (min_pct_replaceable*site_samples) < 5, 5, site_samples - (min_pct_replaceable*site_samples)), 
+        max_suggested = ifelse(site_samples - (max_pct_replaceable*site_samples) < 3, 3, site_samples - (max_pct_replaceable*site_samples))) %>% 
+
+  arrange(latitude, longitude)
+
+rownames(rounded_data) <- rounded_data$ID
+
+spdf <- SpatialPolygonsDataFrame(sp_polygons, data = rounded_data)
+```
+
+
+```{r}
+#creating color palette
+palette <- colorNumeric(palette = "YlOrRd", domain = spdf$mean_pct_replaceable)
+
+#make map
+map <-leaflet(spdf) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>% 
+  addPolygons(color = ~palette(mean_pct_replaceable),
+              weight = 1,
+              opacity = 1,
+              fillOpacity = 0.7,
+              fillColor = ~palette(mean_pct_replaceable),
+              popup = ~paste("mean = ", round(mean_pct_replaceable, 1), "%, sd = ", round(sd, 0), "%"))
+map <- addLegend(
+    map = map,
+    position = "bottomright",
+    pal = palette,
+    values = spdf$mean_pct_replaceable,
+    title = "Avg % Replaceable",
+    labFormat = labelFormat(suffix = "%"))
+
+saveWidget(map, file = "~/Desktop/NOAA/NOAA Work/maps/map_pct_replaceable.html")
+```
+
+```{r}
+#creating color palette
+palette_lb <- colorNumeric(palette = "YlOrRd", domain = spdf$lb)
+
+#map showing lower bound
+map_lb <-leaflet(spdf) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>% 
+  addPolygons(color = ~palette_lb(lb),
+              weight = 1,
+              opacity = 1,
+              fillOpacity = 0.7,
+              fillColor = ~palette_lb(lb),
+              popup = ~paste("mean = ", round(lb, 1), "%"))
+map_lb <- addLegend(
+    map = map_lb,
+    position = "bottomright",
+    pal = palette_lb,
+    values = spdf$lb,
+    title = "Avg % Replaceable(lb)",
+    labFormat = labelFormat(suffix = "%"))
+
+saveWidget(map_lb, file = "~/Desktop/NOAA/NOAA Work/maps/map_pct_rep_lowerbound.html")
+```
+
+```{r}
+#creating color palette
+palette_num <- colorNumeric(palette = "YlOrRd", domain = spdf$number_replacements)
+
+#map showing avg number of replacements
+map_num_rep <-leaflet(spdf) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>% 
+  addPolygons(color = ~palette_num(number_replacements),
+              weight = 1,
+              opacity = 1,
+              fillOpacity = 0.7,
+              fillColor = ~palette_num(number_replacements),
+              popup = ~paste("mean = ", round(number_replacements, 1), "sd = ", round(sd_num, 1)))
+map_num_rep <- addLegend(
+    map = map_num_rep,
+    position = "bottomright",
+    pal = palette_num,
+    values = spdf$number_replacements,
+    title = "Avg number Replaceable")
+
+saveWidget(map_num_rep, file = "~/Desktop/NOAA/NOAA Work/maps/map_number_of_replacements.html")
+```
+
+
+```{r}
+#creating color palette
+palette_num_lb <- colorNumeric(palette = "YlOrRd", domain = spdf$num_lb)
+
+#map showing lower bound (95%) number of replacements
+map_num_rep_lb <-leaflet(spdf) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>% 
+  addPolygons(color = ~palette_num_lb(num_lb),
+              weight = 1,
+              opacity = 1,
+              fillOpacity = 0.7,
+              fillColor = ~palette_num(num_lb),
+              popup = ~paste(round(num_lb, 1)))
+map_num_rep_lb <- addLegend(
+    map = map_num_rep_lb,
+    position = "bottomright",
+    pal = palette_num_lb,
+    values = spdf$num_lb,
+    title = "Lower Bound of Number Replaceable")
+
+saveWidget(map_num_rep_lb, file = "~/Desktop/NOAA/NOAA Work/maps/map_number_of_replacements_lowerbound.html")
+```
+
+```{r}
+#creating color palette
+palette_samples <- colorNumeric(palette = "YlOrRd", domain = spdf$site_samples)
+
+#creating a map for historical number of samples taken at each location
+map_samples <-leaflet(spdf) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>% 
+  addPolygons(color = ~palette_samples(site_samples),
+              weight = 1,
+              opacity = 1,
+              fillOpacity = 0.7,
+              fillColor = ~palette_samples(site_samples),
+              popup = ~paste("mean = ", round(site_samples, 1), " samples"))
+map_samples <- addLegend(
+    map = map_samples,
+    position = "bottomright",
+    pal = palette_samples,
+    values = spdf$site_samples,
+    title = "Historical Average Sample Size")
+
+saveWidget(map_samples, file = "~/Desktop/NOAA/NOAA Work/maps/map_historical_samples.html")
+```
+
+```{r}
+#creating color palette
+palette_low_oxy_depth <- colorNumeric(palette = "YlOrRd", domain = spdf$low_oxy_depth)
+
+#creating a map for minimum oxygen depth
+map_min_oxy_prs <-leaflet(spdf) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>% 
+  addPolygons(color = ~palette_low_oxy_depth(low_oxy_depth),
+              weight = 1,
+              opacity = 1,
+              fillOpacity = 0.7,
+              fillColor = ~palette_low_oxy_depth(low_oxy_depth),
+              popup = ~paste("mean = ", round(low_oxy_depth, 1), "m"))
+map_min_oxy_prs <- addLegend(
+    map = map_min_oxy_prs,
+    position = "bottomright",
+    pal = palette_low_oxy_depth,
+    values = spdf$low_oxy_depth,
+    title = "Avg low oxygen depth point",
+    labFormat = labelFormat(suffix = "m"))
+
+saveWidget(map_min_oxy_prs, file = "~/Desktop/NOAA/NOAA Work/maps/map_min_oxygen_depth.html")
+```
+
+```{r}
+#creating color palette
+palette_suggested <- colorNumeric(palette = "YlOrRd", domain = spdf$suggested_samples)
+
+#creating a map for the number of samples we should take (my suggestion, 95%)
+map_suggested <-leaflet(spdf) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>% 
+  addPolygons(color = ~palette_suggested(suggested_samples),
+              weight = 1,
+              opacity = 1,
+              fillOpacity = 0.7,
+              fillColor = ~palette_suggested(suggested_samples),
+              popup = ~paste("Avg: ", round(suggested_samples, 0), "<br> Range: ", round(max_suggested, 0), " to ", round(min_suggested, 0)))
+map_suggested <- addLegend(
+    map = map_suggested,
+    position = "bottomright",
+    pal = palette_suggested,
+    values = spdf$suggested_samples,
+    title = "Suggested Number of Titrations")
+
+saveWidget(map_suggested, file = "~/Desktop/NOAA/NOAA Work/maps/map_suggestions.html")
+```
+
+```{r}
+#map that shows the amount of data
+
+palette_number_of_stations <- colorNumeric(palette = "YlOrRd", domain = spdf$number_of_stations)
+
+#creating a map for the number of samples we should take (my suggestion, 95%)
+map_number_of_stations <-leaflet(spdf) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>% 
+  addPolygons(color = ~palette_number_of_stations(number_of_stations),
+              weight = 1,
+              opacity = 1,
+              fillOpacity = 0.7,
+              fillColor = ~palette_number_of_stations(number_of_stations),
+              popup = ~paste(round(number_of_stations, 0)))
+map_number_of_stations <- addLegend(
+    map = map_number_of_stations,
+    position = "bottomright",
+    pal = palette_number_of_stations,
+    values = spdf$number_of_stations,
+    title = "n")
+
+saveWidget(map_number_of_stations, file = "~/Desktop/NOAA/NOAA Work/maps/map_number_of_stations.html")
+```
+
+```{r}
+#map that shows ocean depth
+
+palette_depth <- colorNumeric(palette = "YlOrRd", domain = spdf$mean_max_depth)
+
+#creating a map for the number of samples we should take (my suggestion, 95%)
+map_depth <-leaflet(spdf) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>% 
+  addPolygons(color = ~palette_depth(mean_max_depth),
+              weight = 1,
+              opacity = 1,
+              fillOpacity = 0.7,
+              fillColor = ~palette_depth(mean_max_depth),
+              popup = ~paste(round(mean_max_depth, 0), "m"))
+map_depth <- addLegend(
+    map = map_depth,
+    position = "bottomright",
+    pal = palette_depth,
+    values = spdf$mean_max_depth,
+    title = "Ocean Depth",
+    labFormat = labelFormat(suffix = "m"))
+
+saveWidget(map_depth, file = "~/Desktop/NOAA/NOAA Work/maps/map_ocean_depth.html")
+```
+
+
+--------------------------------------------------------------------------------
+How does the suggested number of titrations change by site depth?
+
+```{r}
+ggplot(rounded_data, aes(y = suggested_samples, x = mean_max_depth)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(rounded_data, aes(y = site_samples, x = log(mean_max_depth))) +
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+```{r}
+big_data3 <- big_data2 %>% 
+  group_by(Station, cruise) %>% 
+  summarize(suggested_samples = mean(samples - replaceables), max_depth = mean(max_depth), site_samples = mean(samples),
+            percent_replaceable = mean(percent_replaceable))
+```
+
+```{r}
+ggplot(big_data3, aes(y = suggested_samples, x = log(max_depth))) +
+  geom_point(aes(color = cruise)) +
+  geom_smooth(aes(color = cruise), method = "lm")
+
+ggplot(big_data3, aes(y = site_samples, x = log(max_depth))) +
+  geom_point(aes(color = cruise)) +
+  geom_smooth(aes(color = cruise), method = "lm")
+
+ggplot(big_data3, aes(y = percent_replaceable, x = max_depth)) +
+  geom_point(aes(color = cruise)) +
+  geom_smooth(aes(color = cruise), method = "lm")
+```
+
+```{r}
+summary(lm(site_samples ~ log(max_depth) * cruise, data = big_data3))
+```
+
+```{r}
+summary(lm(suggested_samples ~ log(max_depth) * cruise, data = big_data3))
+```
+
+-------------------------------------------------------------------------------
+
+**General Results**
+
+```{r}
+big_data2 %>% 
+  mutate(suggested = samples - replaceables) %>% 
+  group_by(cruise, max_depth_bin) %>% 
+  summarize(mean_suggested = round(mean(suggested)), lb_suggested = quantile(suggested, 0.95), ub_suggested = quantile(suggested, 0.05)) # how many titrations we should take is upper bound to air higher
+  
+```
+
+
+
+$$
+Suggested = Samples - (\%Removable * Samples) \\
+max = 20, min = 3
+$$
+
+```{r}
+sf <- st_as_sf(spdf)
+write_csv(sf, "~/Desktop/NOAA/NOAA Work/Shiny Data/sf.csv")
+```

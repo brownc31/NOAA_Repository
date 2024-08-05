@@ -1,0 +1,1235 @@
+---
+title: "All Coding"
+output: pdf_document
+date: "2024-06-12"
+---
+
+```{r}
+#load libraries
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(readxl)
+library(broom)
+library(patchwork)
+library(car)
+library(htmlwidgets)
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+gom <- read_csv("~/NOAA Work/Gulf of Mexico/GOM-CLEAN.csv")
+east <- read_csv("~/NOAA Work/East Coast/EAST-CLEAN.csv")
+west <- read_csv("~/NOAA Work/West Coast/WEST-CLEAN.csv")
+```
+
+```{r}
+all_data <- rbind(gom, east, west)
+```
+
+```{r}
+write_csv(all_data, "~/NOAA Work/ALL-CLEAN.csv")
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+ggplot() +
+  geom_smooth(data = all_data, aes(x = oxygen, y = ctdprs), orientation = "y") +
+  geom_smooth(data = all_data, aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red") +
+  scale_y_reverse() +
+  xlim(0, 300) +
+  labs(y = "depth (m)", x = "oxygen (umol/kg)")
+```
+
+##The RMSE for sensed oxygen and titrated oxygen
+```{r}
+mean(abs(all_data$oxygen - all_data$ctdoxy), na.rm = TRUE)
+mean(all_data$oxygen - all_data$ctdoxy, na.rm = TRUE)
+
+all_data <- all_data %>% 
+  mutate(oxy_diff = oxygen - ctdoxy)
+
+ggplot(data = all_data, aes(x = oxy_diff)) +
+  geom_histogram(binwidth = 1) +
+  xlim(-30, 30)
+```
+
+```{r}
+binsss <- all_data %>% 
+  drop_na(stnnbr) %>% 
+  group_by(stnnbr, cruise) %>% 
+  mutate(max_depth = max(ctdprs)) %>% 
+  ungroup() %>% 
+  mutate(max_depth_bin = case_when( max_depth > 2000 & max_depth <= 6000 ~ cut(max_depth, seq(2000, 6000, by = 1000), 
+                                                                          labels = c("2001-3000", "3001-4000", "4001-5000", "5001-6000")), 
+                                    
+                                    max_depth > 500 & max_depth <= 2000 ~ cut(max_depth, seq(500, 2000, by = 250), 
+                                                                          labels = c("501-750", "751-1000", "1001-1250", "1251-1500", "1501-1750", "1751-2000")), 
+                                    
+                                    max_depth > 100 & max_depth <= 500 ~ cut(max_depth, seq(100, 500, by = 100), 
+                                                                          labels = c("101-200", "201-300", "301-400", "401-500")), 
+                                    
+                                    max_depth <= 100 ~ cut(max_depth, seq(0, 100, by = 25), 
+                                                                          labels = c("1-25", "26-50", "51-75", "76-100")), 
+                                    
+                                    TRUE ~ NA_character_ )) %>% 
+  mutate(max_depth_bin = fct_relevel(max_depth_bin, "1-25", "26-50", "51-75", "76-100", "101-200", "201-300", "301-400", "401-500", "501-750", "751-1000", "1001-1250", "1251-1500", "1501-1750", "1751-2000", "2001-3000", "3001-4000", "4001-5000", "5001-6000")) %>% 
+  
+  mutate(latitude_bin = cut(latitude, seq(18, 55, by = 1))) %>% 
+  
+  mutate(longitude_bin = cut(longitude, seq(-133, -58, by = 1))) %>% 
+  
+  #make ctdprs bins
+  mutate(ctdprs_bin = case_when( ctdprs > 2000 & ctdprs <= 6000 ~ cut(ctdprs, seq(2000, 6000, by = 1000), 
+                                                                          labels = c("2001-3000", "3001-4000", "4001-5000", "5001-6000")), 
+                                    
+                                    ctdprs > 500 & ctdprs <= 2000 ~ cut(ctdprs, seq(500, 2000, by = 250), 
+                                                                          labels = c("501-750", "751-1000", "1001-1250", "1251-1500", "1501-1750", "1751-2000")), 
+                                    
+                                    ctdprs > 100 & ctdprs <= 500 ~ cut(ctdprs, seq(100, 500, by = 100), 
+                                                                          labels = c("101-200", "201-300", "301-400", "401-500")), 
+                                    
+                                    ctdprs <= 100 ~ cut(ctdprs, seq(0, 100, by = 25), 
+                                                                          labels = c("1-25", "26-50", "51-75", "76-100")), 
+                                    
+                                    TRUE ~ NA_character_ )) %>%
+  
+  mutate(ctdprs_bin = fct_relevel(ctdprs_bin, "1-25", "26-50", "51-75", "76-100", "101-200", "201-300", "301-400", "401-500", "501-750", "751-1000", "1001-1250", "1251-1500", "1501-1750", "1751-2000", "2001-3000", "3001-4000", "4001-5000", "5001-6000")) %>% 
+  
+  #make oceanographic region variables
+  mutate(region = ifelse(latitude >= 41.75 & longitude >= -71, "Cape Cod to Nova Scotia", "x")) %>%  
+  mutate(region = ifelse(latitude >= 35.25 & latitude < 41.75 & longitude >= -77, "Mid NC to Cape Cod", region)) %>% 
+  mutate(region = ifelse(latitude >= 24.5 & latitude < 35.25 & longitude >= -81.5, "FL Tip to Mid NC", region)) %>% 
+  mutate(region = ifelse(latitude >= 48.5 & longitude <= -122.75, "West Canada", region)) %>% 
+  mutate(region = ifelse(latitude >= 42 & latitude < 48.5 & longitude <= -122, "OR & WA", region)) %>%
+  mutate(region = ifelse(latitude >= 34.5 & latitude < 42 & longitude <= -120.5, "Point Conception to OR", region)) %>%
+  mutate(region = ifelse(latitude < 34.5 & longitude <= -105, "South of Point Conception", region)) %>% 
+  mutate(region = ifelse(latitude <= 31 & latitude >= 28 & longitude >= -91 & longitude <= -87, "Mississippi River Outlet", region)) %>%
+  mutate(region = ifelse(latitude <= 31 & latitude >= 26 & longitude >= -98 & longitude <= -81.5 & region != "Mississippi River Outlet", "Upper Gulf", region)) %>%
+  mutate(region = ifelse(latitude < 26 & latitude >= 18 & longitude >= -98 & longitude <= -80, "Lower Gulf", region))
+```
+
+```{r}
+filtered_bin <- binsss  %>% 
+#  filter(latitude_bin == "(26,27]" & longitude_bin == "(-86,-85]") 
+#  filter(max_depth_bin == "3001-4000")
+  filter(cruise == "ECOA3" | cruise == "GOMECC4")
+
+ggplot() +
+  geom_point(data = filtered_bin, aes(x = oxygen, y = ctdprs, color = cruise), orientation = "y") +
+  #geom_smooth(data = filtered_bin, aes(x = oxygen, y = ctdprs, color = locale), se = FALSE, orientation = "y") +
+  
+  #geom_point(data = filtered_bin, aes(x = ctdoxy, y = ctdprs), color = "red", orientation = "y") +
+  #geom_smooth(data = filtered_bin, aes(x = ctdoxy, y = ctdprs), color = "red", se = FALSE, orientation = "y") +
+  
+  scale_y_reverse() +
+  #  xlim(0, 300) +
+  labs(title = "Titration Data on Coast", y = "depth (m)", x = "oxygen (umol/kg)")
+```
+
+```{r}
+ggplot() +
+ geom_point(data = binsss, aes(x = oxygen, y = ctdprs, color = locale), orientation = "y") +
+ geom_smooth(data = binsss, aes(x = oxygen, y = ctdprs, color = locale), se = FALSE, orientation = "y") +
+  
+  #geom_point(data = filtered_bin, aes(x = ctdoxy, y = ctdprs), color = "red", orientation = "y") +
+  geom_smooth(data = binsss, aes(x = ctdoxy, y = ctdprs, color = locale), se = FALSE, orientation = "y") +
+  
+  scale_y_reverse() +
+#  xlim(0, 300) +
+  labs(y = "depth (m)", x = "oxygen (umol/kg)")
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+set.seed(12030)
+replacements <- function(titration_data, sensor_data, threshold) {
+ 
+  replacable <- 0
+  
+  
+  for (i in 1:length(titration_data)) {
+    new_data <- titration_data
+    index <- sample(1:length(titration_data), i)
+    new_data[index] <- sensor_data[index]
+    
+    if (mean(abs((new_data - titration_data) / titration_data)) <= threshold) {
+      replacable <- replacable + 1
+      
+    }
+    
+  }
+  
+  
+ #mean percent difference in data
+ #mean b/c it will determine accuracy of overall profile
+  
+  return(replacable)
+  #output should be the number of samples that can be replaced by ctd data while having a 1 percent or less difference from the original data
+}
+```
+
+
+```{r}
+set.seed(12030)
+results <- binsss %>% 
+  drop_na(ctdoxy) %>% 
+  group_by(stnnbr, cruise) %>% 
+  mutate(replacables = replacements(oxygen, ctdoxy, 0.01)) %>% 
+  mutate(percent_replacable = replacables / n(), samples = n()) %>% 
+  ungroup()
+  
+
+results %>% 
+  #group_by(locale, max_depth_bin) %>% 
+  summarize(mean = mean(percent_replacable), sd = sd(percent_replacable), lq = quantile(percent_replacable, 0.025), uq = quantile(percent_replacable, 0.975))
+
+
+#on average, we can replace 62% of titrations with CTD data and have a 1% or less difference. SD = 32%. 90% of the data is within 0.125 to 1. 95% of the data is within the whole range.
+```
+
+###Duplicate SD is about 0.1 units on average. Max is about 0.17 and Min is about 0.4.
+
+```{r}
+set.seed(12030)
+duplicates <- function(titration_data, sensor_data, threshold) {
+ 
+  replacable <- 0
+  
+  
+  for (i in 1:length(titration_data)) {
+    new_data <- titration_data
+    index <- sample(1:length(titration_data), i)
+    new_data[index] <- sensor_data[index]
+    
+    if (mean(abs(new_data - titration_data)) <= threshold) {
+      replacable <- replacable + 1
+      
+    }
+    
+  }
+  
+  
+ #mean percent difference in data
+ #mean b/c it will determine accuracy of overall profile
+  
+  return(replacable)
+  #output should be the number of samples that can be replaced by ctd data while having a 1 percent or less difference from the original data
+}
+```
+
+
+```{r}
+set.seed(12030)
+result_dupes <- binsss %>% 
+  drop_na(ctdoxy) %>% 
+  group_by(stnnbr, cruise) %>% 
+  mutate(duplicates = duplicates(oxygen, ctdoxy, 0.1)) %>% 
+  mutate(percent_replacable_dupe = duplicates / n()) %>% 
+  ungroup()
+
+result_dupes %>% 
+  #group_by(locale, max_depth_bin) %>% 
+  summarize(mean = mean(percent_replacable_dupe), sd = sd(percent_replacable_dupe), 
+            lq = quantile(percent_replacable_dupe, 0.025), uq = quantile(percent_replacable_dupe, 0.975),
+            percent = sum(abs(oxygen - ctdoxy) <= 0.1)/n())
+
+
+
+#on average, 5% of CTD data is "the same" as the titration data (roughly speaking) --> avg
+#9% for max
+#2% for min
+```
+
+###Duplicate Work END
+
+```{r}
+ggplot(data = results, aes(x = percent_replacable)) +
+  geom_histogram() +
+  labs(title = "Distribution of the Replaceability of Profiles", y = "Number of Profiles", x = "Percent Replaceable")
+```
+
+```{r}
+#lets be more specific
+locale_results <- results %>% 
+  group_by(locale) %>% 
+  summarize(`Mean(%)` = 100*round(mean(percent_replacable), 2), `SD(%)` = 100*round(sd(percent_replacable), 2), lq = quantile(percent_replacable, 0.025), uq = quantile(percent_replacable, 0.975))
+#East: 95% of data within 0.00 & 1.00
+#GOM: 95% of data within 0.33 & 1.00
+#West: 95% of data within 0.00 & 1.00
+
+results %>% 
+  group_by(region) %>% 
+  summarize(mean = mean(percent_replacable), sd = sd(percent_replacable), lq = quantile(percent_replacable, 0.025), uq = quantile(percent_replacable, 0.975))
+#results more likely influenced by cruise
+
+results %>% 
+  group_by(cruise) %>% 
+  summarize(mean = mean(percent_replacable), sd = sd(percent_replacable), lq = quantile(percent_replacable, 0.025), uq = quantile(percent_replacable, 0.975))
+
+results %>% 
+  group_by(max_depth_bin) %>% 
+  summarize(mean = mean(percent_replacable), sd = sd(percent_replacable), lq = quantile(percent_replacable, 0.025), uq = quantile(percent_replacable, 0.975))
+#shallow East Coast areas are inconsistent, middle depth could be sampled from more often
+#similar for GOM
+#mid-shallow depths for West are more accurate and consistent
+```
+
+
+
+```{r}
+#creates profiles made under randomization process
+results <- results %>% 
+  mutate(random_choices = runif(n()) < percent_replacable) %>% 
+  mutate(new_profile = ifelse(random_choices, ctdoxy, oxygen))
+```
+
+```{r}
+filtered_results <- results %>% 
+#  filter(latitude_bin == "(26,27]" & longitude_bin == "(-86,-85]") 
+#  filter(max_depth_bin == "3001-4000")
+  filter(cruise == "WCOA7" & stnnbr == 1)
+
+ggplot() +
+ geom_point(data = filtered_results, aes(x = oxygen, y = ctdprs), orientation = "y") +
+ geom_smooth(data = filtered_results, aes(x = oxygen, y = ctdprs), color = "black", se = FALSE, orientation = "y") +
+  
+ geom_point(data = filtered_results, aes(x = new_profile, y = ctdprs), color = "red", alpha = 0.5, orientation = "y") +
+ geom_smooth(data = filtered_results, aes(x = new_profile, y = ctdprs), color = "red", se = FALSE, orientation = "y") +
+  
+#geom_point(data = filtered_results, aes(x = ctdoxy, y = ctdprs), color = "pink", alpha = 0.5, orientation = "y") +
+ #geom_smooth(data = filtered_results, aes(x = ctdoxy, y = ctdprs), color = "pink", se = FALSE, orientation = "y") +
+  
+  scale_y_reverse() +
+  #xlim(0, 300) +
+  labs(title = "Replaced Profile (Red) vs Previous Profile (Black)", y = "depth (m)", x = "oxygen (umol/kg)", caption = "Cruise WCOA-7, site 1")
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+#new idea: 
+#see if the difference between ctd data and normal data is consistently very low at any depths for locales
+#Find 95% CI for the absolute difference using MOE and mean. If it does not exceed 1% or 0.01, that is good
+#+|-1.96*sd(data)/sqrt(n)
+#result should be bounds of results
+```
+
+```{r}
+binsss %>% 
+  drop_na(ctdoxy) %>% 
+  group_by(locale, max_depth_bin, latitude_bin, longitude_bin) %>% 
+  mutate(lower_bound = mean(abs(oxygen - ctdoxy)/oxygen) - 1.96*(sd(abs(oxygen - ctdoxy)/oxygen)/sqrt(n())),
+         upper_bound = mean(abs(oxygen - ctdoxy)/oxygen) + 1.96*(sd(abs(oxygen - ctdoxy)/oxygen)/sqrt(n()))) %>% 
+  ungroup() %>% 
+  group_by(max_depth_bin, locale) %>% 
+  summarize(avg = round(mean(upper_bound, na.rm = TRUE), 3), sd = round(sd(upper_bound, na.rm = TRUE), 3)) %>% 
+  arrange(locale)
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+#can we replace titrations from one site with titrations from a similar site?
+
+location_replacements <- function(titration, depth, locale, stnnbr, threshold) {
+  replacable <- rep(0, length(titration))  # Initialize replacable as a vector
+
+  for (i in 1:length(titration)) {
+    new_data <- titration
+    index <- i
+
+    # Find possible replacement data points
+    possible_data <- which(abs(depth - depth[index]) <= 10 & locale == locale[index] & stnnbr != stnnbr[index])
+
+    if (length(possible_data) > 0) {
+      selected_replacement <- sample(possible_data, 1)
+
+      # Check if the replacement meets the threshold condition
+      if (mean(abs((titration[selected_replacement] - titration[index]) / titration), na.rm = TRUE) <= threshold) {
+        replacable[index] <- 1
+      }
+    }
+  }
+
+  return(replacable)
+}
+```
+
+```{r}
+# Apply the function and calculate percent_replaceable
+set.seed(12030)
+results2 <- binsss %>%
+  drop_na(oxygen, ctdoxy, ctdprs) %>%
+  mutate(replacables = location_replacements(oxygen, ctdprs, locale, stnnbr, 0.01)) %>%
+  group_by(stnnbr, cruise) %>%
+  mutate(percent_replacable = sum(replacables) / n()) %>% 
+  ungroup()
+
+```
+
+```{r}
+# Summarize the results
+summary_results <- results2 %>%
+  #group_by(locale, max_depth_bin) %>%
+  summarize(
+    mean = mean(percent_replacable, na.rm = TRUE),
+    lowbound = mean - 1.96 * sqrt(mean * (1 - mean) / n()),
+    upbound = mean + 1.96 * sqrt(mean * (1 - mean) / n())
+  )
+
+#this gives us the proportion of results that are replaceable by other data when the other data is selected randomly based on set conditions
+print(summary_results)
+
+#so, about 4% of the time we could use another data point from similar conditions to accurately substitute for another oxygen titration
+```
+
+--------------------------------------------------------------------------------
+
+**Extreme Cases**
+
+Cases with no replacements available
+```{r}
+extreme0 <- results %>% 
+  filter(percent_replacable == 0) 
+
+extreme0 %>% 
+  group_by(max_depth_bin) %>% 
+  summarize(count = round(n()/446, 2)) #proportion in each bin
+
+extreme0 %>% 
+  group_by(stnnbr, cruise) %>% 
+  summarize(count = n()) %>% 
+  ungroup() %>% 
+  summarize(mean = mean(count), sd = sd(count), lq = quantile(count, 0.025), uq = quantile(count, 0.975)) #average number of titrations done
+
+extreme0 %>% 
+  group_by(region) %>% 
+  summarize(mean = mean(ctdtmp), sd = sd(ctdtmp), lq = quantile(ctdtmp, 0.025), uq = quantile(ctdtmp, 0.975)) #average CTD temp based on region
+
+extreme0 %>% 
+  filter(ctdsal > 0) %>% 
+  group_by(region) %>% 
+  summarize(mean = mean(ctdsal), sd = sd(ctdsal), lq = quantile(ctdsal, 0.025), uq = quantile(ctdsal, 0.975)) #average salinity by region
+```
+
+Cases with all replacements available
+```{r}
+extreme1 <- results %>% 
+  filter(percent_replacable == 1)
+
+extreme1 %>% 
+  #filter(max_depth_bin != "1251-1500" & max_depth_bin != "1501-1750", max_depth_bin != "1751-2000", max_depth_bin != "2001-3000", max_depth_bin != "3001-4000", max_depth_bin != "4001-5000") %>% 
+  group_by(max_depth_bin) %>% 
+  summarize(count = round(n()/4349, 2))
+
+extreme1 %>% 
+  group_by(stnnbr, cruise) %>% 
+  summarize(count = n()) %>% 
+  ungroup() %>% 
+  summarize(mean = mean(count), sd = sd(count), lq = quantile(count, 0.025), uq = quantile(count, 0.975))
+
+extreme1 %>% 
+  group_by(region) %>% 
+  summarize(mean = mean(ctdtmp), sd = sd(ctdtmp), lq = quantile(ctdtmp, 0.025), uq = quantile(ctdtmp, 0.975))
+
+extreme1 %>% 
+  filter(ctdsal > 0) %>% 
+  group_by(region) %>% 
+  summarize(mean = mean(ctdsal), sd = sd(ctdsal), lq = quantile(ctdsal, 0.025), uq = quantile(ctdsal, 0.975))
+```
+
+All other cases in between
+```{r}
+extremeother <- results %>% 
+  filter(percent_replacable != 1 & percent_replacable != 0)
+
+extremeother %>% 
+  #filter(max_depth_bin != "1251-1500" & max_depth_bin != "1501-1750", max_depth_bin != "1751-2000", max_depth_bin != "2001-3000", max_depth_bin != "3001-4000", max_depth_bin != "4001-5000") %>% 
+  group_by(max_depth_bin) %>% 
+  summarize(count = round(n()/8998, 2))
+
+extremeother %>% 
+  group_by(stnnbr, cruise) %>% 
+  summarize(count = n()) %>% 
+  ungroup() %>% 
+  summarize(mean = mean(count), sd = sd(count), lq = quantile(count, 0.025), uq = quantile(count, 0.975))
+
+extremeother %>% 
+  group_by(region) %>% 
+  summarize(mean = mean(ctdtmp), sd = sd(ctdtmp), lq = quantile(ctdtmp, 0.025), uq = quantile(ctdtmp, 0.975))
+
+extremeother %>% 
+  filter(ctdsal > 0) %>% 
+  group_by(region) %>% 
+  summarize(mean = mean(ctdsal), sd = sd(ctdsal), lq = quantile(ctdsal, 0.025), uq = quantile(ctdsal, 0.975))
+```
+
+--------------------------------------------------------------------------------
+
+**Modeling**
+
+```{r}
+#with + we interpret as the change with all other variables held constant
+lm <- lm(formula = percent_replacable ~ locale * ctdtmp * ctdsal * ctdprs * max_depth, data = results)
+
+summary(lm)
+```
+
+```{r}
+#creating function that finds most frequent data
+find_mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x,ux)))]
+}
+```
+
+```{r}
+#makes a binary variable for the extreme cases
+logistic_data <- results %>% 
+  filter(percent_replacable == 0 | percent_replacable == 1) %>% 
+  filter(ctdsal > 0) %>% 
+  group_by(cruise, stnnbr) %>% 
+  summarize(ctdtmp = mean(ctdtmp), ctdsal = mean(ctdsal), max_depth = mean(max_depth), region = find_mode(region), percent_replacable = mean(percent_replacable))
+```
+
+```{r}
+#fits and looks at a simple model of our data
+glm <- glm(percent_replacable ~ max_depth + ctdtmp + ctdsal + region, family = binomial, logistic_data)
+summary(glm)
+```
+
+```{r}
+#EDA graphing 
+ggplot(logistic_data, aes(x = max_depth, y = as.factor(percent_replacable))) + geom_boxplot() +
+  labs(title = "Max Depth of the Site on Percent of Titrations Replaceable by CTD Data", x = "Max Depth", y = "% Replaceable")
+```
+
+```{r}
+#groups max_depth variable by values
+logistic_data$depth_groups <- ntile(logistic_data$max_depth, n = 10)
+
+#creates empirical log odds for max depth
+regression_agg <- logistic_data %>% 
+  summarize(depth_groups_med = median(max_depth),
+            pi_emp = mean(percent_replacable),
+            log_odds_emp = log(pi_emp/(1-pi_emp)))
+
+#plots max depth against empirical log odds
+ggplot(regression_agg, aes(x = depth_groups_med, y = log_odds_emp)) + geom_point() + geom_smooth(method = "lm", se = FALSE)
+```
+
+
+```{r}
+#model with transformations
+logistic_data$transformed_depth <- log(logistic_data$max_depth)
+logistic_data$transformed_sal <- sqrt(logistic_data$ctdsal)
+logistic_data$transformed_tmp <- logistic_data$ctdtmp
+logistic_data$transformed_region <- logistic_data$region
+
+transformedglm <- glm(percent_replacable ~ transformed_depth + transformed_sal + transformed_tmp + transformed_region, data = logistic_data, family = binomial)
+```
+
+```{r}
+#creating residual plots
+regressionaug <- augment(transformedglm, resid.type = "pearson", data = logistic_data)
+
+regressionaug$tmp_groups <- ntile(logistic_data$transformed_tmp, n = 20)
+regression_resid1 <- regressionaug %>% 
+  group_by(tmp_groups) %>% 
+  summarize(tmp_groups_med = median(ctdtmp),
+            resid_mean = mean(.resid))
+
+tmpplot <- ggplot(regression_resid1, aes(x = tmp_groups_med, y = resid_mean)) + geom_point() + geom_hline(yintercept = 0)
+
+regressionaug$sal_groups <- ntile(logistic_data$transformed_sal, n = 20)
+regression_resid2 <- regressionaug %>% 
+  group_by(sal_groups) %>% 
+  summarize(sal_groups_med = median(sqrt(ctdsal)),
+            resid_mean = mean(.resid))
+
+salplot <- ggplot(regression_resid2, aes(x = sal_groups_med, y = resid_mean)) + geom_point() + geom_hline(yintercept = 0)
+
+regressionaug$depth_groups <- ntile(logistic_data$transformed_depth, n = 20)
+regression_resid3 <- regressionaug %>% 
+  group_by(depth_groups) %>% 
+  summarize(depth_groups_med = median(log(max_depth)),
+            resid_mean = mean(.resid))
+
+depthplot <- ggplot(regression_resid3, aes(x = depth_groups_med, y = resid_mean)) + geom_point() + geom_hline(yintercept = 0)
+
+regression_resid4 <- logistic_data %>% 
+  summarize(region = region,
+    pi_emp = mean(percent_replacable),
+            log_odds_emp = log(pi_emp/(1-pi_emp)))
+
+regionplot <- ggplot(regression_resid4, aes(x = log_odds_emp, y = region)) + geom_boxplot() + geom_hline(yintercept = 0)
+
+tmpplot + depthplot + salplot + regionplot
+```
+
+```{r}
+#removing temp because it's too collinear & sal because it's not significant
+glm2 <- glm(percent_replacable ~ transformed_depth + transformed_region, data = logistic_data, family = binomial)
+summary(glm2)
+```
+
+```{r}
+#checking for colinearity
+vif(transformedglm)
+vif(glm2)
+```
+
+
+
+As depth increases, so do the odds of the sample being replaceable by ctd data. We don't see anything out of the norm of what we'd expect. For each multiple of e in depth there is a 0.68 increase in the odds of the sample being replaceable.
+
+--------------------------------------------------------------------------------
+
+**General Questions**
+
+What are the odds of omitting one sample from each profile and having a similar profile if you sample all 24 times? 
+
+100%
+
+```{r}
+set.seed(23)
+results %>% 
+  group_by(cruise, stnnbr) %>% 
+  mutate(count = n()) %>% 
+  ungroup %>% 
+  filter(count == 24) %>% 
+  summarize(odds = sum(replacables > 0)/n())
+```
+
+What are the odds of omitting one sample from each profile and having a similar profile for sites between 100m and 1000m if we sample 24 times?
+
+100%
+
+```{r}
+set.seed(23)
+results %>% 
+  filter(max_depth > 100 & max_depth < 1000) %>% 
+  group_by(cruise, stnnbr) %>% 
+  mutate(count = n()) %>% 
+  ungroup %>% 
+  filter(count == 24) %>% 
+  summarize(odds = sum(replacables > 0)/n())
+```
+
+What about 2 samples? 3? 5? 10?
+
+
+```{r}
+set.seed(23)
+#for each sample replacement # (for loop) put the sample number in one column of a df, and calculate the odds 
+#assuming the number of samples taken was more or equal to the number of sample replacements (if statement)
+df <- data.frame(odds = double(),
+                    potential_sample_replacements = integer())
+for (i in 1:24) {
+  res <- results %>% 
+    group_by(cruise, stnnbr) %>% 
+    mutate(count = n()) %>% 
+    ungroup() %>% 
+    filter(count == 24) %>% 
+    filter(ctdprs > 100 & ctdprs < 1000) %>% 
+    summarize(odds = sum(replacables >= i)/n())
+  
+  df <- rbind(df, data.frame(odds = res$odds, potential_sample_replacements = i))
+  
+  }
+#result should be a dataframe with odds and samples 1 through the maximum possible
+
+ggplot(data = df, aes(x = potential_sample_replacements, y = odds)) +
+  geom_path() +
+  geom_point() +
+  ylim(c(0, 1.05)) +
+  labs(title = "Probability of Reliably Replacing one Randomly Chosen Titration with CTD data", 
+       x = "Number of Potential Sample Replacements", 
+       y = "Odds")
+```
+
+
+What if we don't filter to middle depths?
+
+There is very little difference
+
+```{r}
+set.seed(23)
+#for each sample replacement # (for loop) put the sample number in one column of a df, and calculate the odds 
+#assuming the number of samples taken was more or equal to the number of sample replacements (if statement)
+df <- data.frame(odds = double(),
+                    potential_sample_replacements = integer())
+for (i in 1:24) {
+  res <- results %>% 
+    group_by(cruise, stnnbr) %>% 
+    mutate(count = n()) %>% 
+    ungroup() %>% 
+    filter(count == 24) %>% 
+    summarize(odds = sum(replacables >= i)/n())
+  
+  df <- rbind(df, data.frame(odds = res$odds, potential_sample_replacements = i))
+  
+  }
+#result should be a dataframe with odds and samples 1 through the maximum possible
+
+ggplot(data = df, aes(x = potential_sample_replacements, y = odds)) +
+  geom_path() +
+  geom_point() +
+  ylim(c(0, 1.05)) +
+  labs(title = "Odds of Replacing a Sample for a Site we Would Normally Take 24 Samples for", 
+       x = "Number of Potential Sample Replacements", 
+       y = "Odds")
+```
+
+What if it's a site we would take 18 samples for? 
+```{r}
+set.seed(23)
+#for each sample replacement # (for loop) put the sample number in one column of a df, and calculate the odds 
+#assuming the number of samples taken was more or equal to the number of sample replacements (if statement)
+df <- data.frame(odds = double(),
+                    potential_sample_replacements = integer())
+for (i in 1:18) {
+  res <- results %>% 
+    group_by(cruise, stnnbr) %>% 
+    mutate(count = n()) %>% 
+    ungroup() %>% 
+    filter(count == 18) %>% 
+    filter(ctdprs > 100 & ctdprs < 1000) %>% 
+    summarize(odds = sum(replacables >= i)/n())
+  
+  df <- rbind(df, data.frame(odds = res$odds, potential_sample_replacements = i))
+  
+  }
+#result should be a dataframe with odds and samples 1 through the maximum possible
+
+ggplot(data = df, aes(x = potential_sample_replacements, y = odds)) +
+  geom_path() +
+  geom_point() +
+  ylim(c(0, 1.05)) +
+  labs(title = "Odds of Replacing a Sample for a Site we Would Normally Take 18 Samples for", 
+       x = "Number of Potential Sample Replacements", 
+       y = "Odds")
+```
+
+12?
+
+```{r}
+set.seed(23)
+#for each sample replacement # (for loop) put the sample number in one column of a df, and calculate the odds 
+#assuming the number of samples taken was more or equal to the number of sample replacements (if statement)
+df <- data.frame(odds = double(),
+                    potential_sample_replacements = integer())
+for (i in 1:12) {
+  res <- results %>% 
+    group_by(cruise, stnnbr) %>% 
+    mutate(count = n()) %>% 
+    ungroup() %>% 
+    filter(count == 12) %>% 
+    filter(ctdprs > 100 & ctdprs < 1000) %>% 
+    summarize(odds = sum(replacables >= i)/n())
+  
+  df <- rbind(df, data.frame(odds = res$odds, potential_sample_replacements = i))
+  
+  }
+#result should be a dataframe with odds and samples 1 through the maximum possible
+
+ggplot(data = df, aes(x = potential_sample_replacements, y = odds)) +
+  geom_path() +
+  geom_point() +
+  ylim(c(0, 1.05)) +
+  labs(title = "Odds of Replacing a Sample for a Site we Would Normally Take 12 Samples for", 
+       x = "Number of Potential Sample Replacements", 
+       y = "Odds")
+```
+
+6?
+
+```{r}
+set.seed(23)
+#for each sample replacement # (for loop) put the sample number in one column of a df, and calculate the odds 
+#assuming the number of samples taken was more or equal to the number of sample replacements (if statement)
+df <- data.frame(odds = double(),
+                    potential_sample_replacements = integer())
+for (i in 1:6) {
+  res <- results %>% 
+    group_by(cruise, stnnbr) %>% 
+    mutate(count = n()) %>% 
+    ungroup() %>% 
+    filter(count == 6) %>% 
+    filter(ctdprs > 100 & ctdprs < 1000) %>% 
+    summarize(odds = sum(replacables >= i)/n())
+  
+  df <- rbind(df, data.frame(odds = res$odds, potential_sample_replacements = i))
+  
+  }
+#result should be a dataframe with odds and samples 1 through the maximum possible
+
+ggplot(data = df, aes(x = potential_sample_replacements, y = odds)) +
+  geom_path() +
+  geom_point() +
+  ylim(c(0, 1.05)) +
+  labs(title = "Odds of Replacing a Sample for a Site we Would Normally Take 6 Samples for", 
+       x = "Number of Potential Sample Replacements", 
+       y = "Odds")
+```
+
+What proportion of profiles cannot be replaced by any CTD data?
+
+3.2% & see chart
+
+What proportion of profiles are completely replaceable by CTD data? Not at all replaceable? What about grouped by region?
+
+31.5% & see chart
+
+```{r}
+results %>% 
+  summarize(prop = sum(percent_replacable == 1)/n())
+
+results %>% 
+  mutate(region = fct_relevel(region, c("Lower Gulf", "Upper Gulf", "Mississippi River Outlet", "FL Tip to Mid NC", "Mid NC to Cape Cod", "Cape Cod to Nova Scotia", "West Canada", "OR & WA", "Point Conception to OR", "South of Point Conception"))) %>% 
+  filter(max_depth >= 100) %>% 
+  group_by(region) %>% 
+  summarize(prop_replaceable = sum(percent_replacable == 1)/n(), prop_unreplaceable = sum(percent_replacable == 0)/n()) %>% 
+  pivot_longer(cols = -region,
+               names_to = "Replaceable?") %>% 
+  mutate(`Replaceable?` = fct_recode(`Replaceable?`,
+                                     "Replaceable" = "prop_replaceable",
+                                     "Unreplaceable" = "prop_unreplaceable")) %>% 
+  ggplot(aes(x = region, y = value, fill = `Replaceable?`)) +
+    geom_col(position = "dodge") +
+    scale_fill_manual(values = c("Replaceable" = "darkblue", "Unreplaceable" = "darkred")) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(title = "Percentage of Profiles That are Completely Replaceable or \n Completely Unreplaceable by CTD Data (> 100m)", y = "Proportion", x = "Region")
+```
+
+Does CTD data get less accurate at larger depths?
+
+Not noticeably
+
+```{r}
+ctdprs_diff_graph <- results %>% 
+  group_by(ctdprs_bin) %>% 
+  summarize(mean_diff = mean(abs(ctdoxy - oxygen), na.rm = TRUE), 
+            sd = sd(abs(ctdoxy - oxygen)), 
+            mean_percent_diff = mean(abs(ctdoxy - oxygen)/((ctdoxy + oxygen)/2)*100, na.rm = TRUE))
+
+ggplot(ctdprs_diff_graph, aes(x = ctdprs_bin, y = mean_percent_diff)) +
+  geom_bar(stat = "identity") +
+  #geom_errorbar(aes(ymin = mean_diff - se, ymax = mean_diff + se)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Mean Difference Between CTD Data and Titration Data for Depth Groups", x = "Depth Bin (meters)", y = "% Diff")
+```
+
+
+
+
+Where is CTD data more / less accurate?
+
+```{r}
+cruise_diff_graph <- results %>% 
+  group_by(cruise) %>% 
+  summarize(mean_diff = mean(abs(ctdoxy - oxygen), na.rm = TRUE), 
+            sd = sd(abs(ctdoxy - oxygen)), 
+            mean_percent_diff = mean(abs(ctdoxy - oxygen)/((ctdoxy + oxygen)/2)*100, na.rm = TRUE))
+
+cruise_diff_graph$cruise <- reorder(cruise_diff_graph$cruise, cruise_diff_graph$mean_percent_diff)
+ggplot(cruise_diff_graph, aes(x = cruise, y = mean_percent_diff)) +
+  geom_bar(stat = "identity") +
+  #geom_errorbar(aes(ymin = mean_diff - se, ymax = mean_diff + se)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Mean Difference Between CTD Data and Titration Data for Cruises", x = "Cruise", y = "% Diff")
+
+region_diff_graph <- results %>% 
+  group_by(region) %>% 
+  summarize(mean_diff = mean(abs(ctdoxy - oxygen), na.rm = TRUE), 
+            sd = sd(abs(ctdoxy - oxygen)), 
+            mean_percent_diff = mean(abs(ctdoxy - oxygen)/((ctdoxy + oxygen)/2)*100, na.rm = TRUE))
+
+region_diff_graph$region <- reorder(region_diff_graph$region, region_diff_graph$mean_percent_diff)
+ggplot(region_diff_graph, aes(x = region, y = mean_percent_diff)) +
+  geom_bar(stat = "identity") +
+  #geom_errorbar(aes(ymin = mean_diff - se, ymax = mean_diff + se)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Mean Difference Between CTD Data and Titration Data for Regions", x = "Oceanographic Region", y = "% Diff")
+```
+
+Does Oxygen Level Influence Reliability of CTD Sensor?
+
+Yes, but likely because it's correlated with depth & location
+
+```{r}
+#first, let's bin oxygen data!
+results <- results %>% 
+  mutate(oxy_bin = cut(oxygen, seq(0, 500, by = 100), 
+                       labels = c("0-100", "101-200", "201-300", "301-400", "401-500")))
+
+oxygen_diff_graph <- results %>% 
+  group_by(oxy_bin, locale) %>% 
+  summarize(mean_diff = mean(abs(ctdoxy - oxygen), na.rm = TRUE),  
+         mean_percent_diff = mean(abs(ctdoxy - oxygen)/((ctdoxy + oxygen)/2)*100, na.rm = TRUE)) 
+
+ggplot(oxygen_diff_graph, aes(x = oxy_bin, y = mean_percent_diff)) +
+  geom_bar(stat = "identity", aes(fill = locale)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Mean Difference Between CTD Data and Titration Data for Oxygen Levels", x = "Oxygen Bin", y = "% Diff")
+
+depth_diff_graph <- results %>% 
+   group_by(ctdprs_bin, locale) %>% 
+  summarize(mean_diff = mean(abs(ctdoxy - oxygen), na.rm = TRUE),  
+         mean_percent_diff = mean(abs(ctdoxy - oxygen)/((ctdoxy + oxygen)/2)*100, na.rm = TRUE))
+
+ggplot(depth_diff_graph, aes(x = ctdprs_bin, y = mean_percent_diff)) +
+  geom_bar(stat = "identity", aes(fill = locale)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Mean Difference Between CTD Data and Titration Data for Oxygen Levels", x = "Depth Bin", y = "% Diff")
+
+ggplot(results, aes(x = oxygen, y = ctdprs)) +
+  geom_point()
+```
+
+At what depth is the minimum oxygen zone? (typical range)
+
+```{r}
+results %>% 
+  group_by(cruise, stnnbr) %>% 
+  mutate(low_oxy_depth = ifelse(oxygen == min(oxygen), ctdprs, NA), mean_low_oxy_depth = mean(low_oxy_depth, na.rm = TRUE)) %>% 
+  mutate(low_oxy_depth = mean(mean_low_oxy_depth)) %>% 
+  ungroup() %>% 
+  group_by(region) %>% 
+  filter(ctdprs > 50) %>% 
+  summarize(median = median(low_oxy_depth), sd = sd(low_oxy_depth))
+```
+
+At what depth proportion is the minimum oxygen zone? (typical range)
+
+```{r}
+results %>% 
+  group_by(cruise, stnnbr) %>% 
+  mutate(low_oxy_depth = median(ifelse(oxygen == min(oxygen), ctdprs, NA), na.rm = TRUE), low_oxy_depth_prop = low_oxy_depth / max_depth) %>% 
+  ungroup() %>% 
+  group_by(region) %>% 
+  filter(ctdprs > 50) %>% 
+  summarize(median = median(low_oxy_depth_prop), sd = sd(low_oxy_depth_prop))
+```
+
+--------------------------------------------------------------------------------
+
+**Removing Titration Samples Analysis**
+
+```{r}
+omit_samples <- function(data, threshold) {
+  omits <- 0
+  old_profile <- data %>% 
+    select(oxygen, ctdprs)
+  
+  if (nrow(old_profile) >= 20) {
+    
+    for(i in 1:(nrow(old_profile) - 12)) {
+      indices <- sample(1:(nrow(old_profile) - 12), i) #sample randomly i amount
+    
+      new_profile <- old_profile %>% 
+        mutate(oxygen2 = ifelse(row_number() %in% indices, NA, oxygen)) #replace those rows from the data with NAs and make this a new data set
+
+      missing_depths <- new_profile$ctdprs[indices] #find depths in old profile that have been removed from the new profile
+    
+      tryCatch({
+        
+        predicted_values <- predict(loess(oxygen2 ~ ctdprs, data = new_profile, na.action = na.exclude)) #predict with loess at these depths 
+    
+        new_profile$oxygen2[indices] <- predicted_values[indices] #add predictions to the new_profile
+    
+        if (mean(abs((new_profile$oxygen - new_profile$oxygen2) / new_profile$oxygen), na.rm = TRUE) <= threshold) { 
+          omits <- omits + 1
+        }
+      }, error = function(err) {
+      cat("Error in LOESS prediction: ", conditionMessage(err), "\n")
+      })
+    }
+  }
+  else{
+    omits <- 0
+  }
+  return(omits)
+}
+```
+
+```{r}
+omit_data <- results %>% 
+  group_by(cruise, stnnbr) %>% 
+  mutate(omits = omit_samples(cur_data(), 0.01), proportion_omits = omits / n())
+```
+
+
+13% of titrations could be omitted without CTD data replacement
+```{r}
+omit_data %>% 
+  ungroup() %>% 
+  summarize(mean = mean(proportion_omits))
+```
+
+
+This is likely skewed by the amount of samples taken/depth
+```{r}
+omit_data %>% 
+  ungroup() %>% 
+  group_by(locale) %>% 
+  summarize(mean = mean(proportion_omits))
+
+omit_data %>% 
+  ungroup() %>% 
+  group_by(region) %>% 
+  summarize(mean = mean(proportion_omits))
+```
+
+--------------------------------------------------------------------------------
+
+**Mapping**
+
+```{r}
+library(leaflet)
+library(sp)
+```
+
+```{r}
+#round lat and long down to a whole lat or long
+rounded_results <- results %>% 
+  mutate(latitude = round(latitude, 0), longitude = round(longitude, 0)) %>% 
+  group_by(latitude, longitude) %>% 
+  
+  summarize(mean_percent_replaceable = mean(percent_replacable), sample_size = n(), sd_replaceable = sd(percent_replacable),
+            low_oxy_depth = median(median(ifelse(oxygen == min(oxygen), ctdprs, NA), na.rm = TRUE)), low_oxy_depth_prop = median(low_oxy_depth / max_depth),
+            number_replacements = mean(replacables), sd_num = sd(replacables), site_samples = mean(samples),
+            site_samples = ifelse(site_samples > 24, site_samples / 2, site_samples), 
+            number_replacements = ifelse(number_replacements > 24, number_replacements / 2, number_replacements),
+            lb = 100 * quantile(percent_replacable, 0.025), num_lb = quantile(replacables, 0.025)) %>% 
+  
+  filter(sample_size >= 30) #want enough data
+```
+
+```{r}
+#define range of latitudes and longitudes
+lat_range <- seq(min(rounded_results$latitude), max(rounded_results$latitude), by = 1)
+lon_range <- seq(min(rounded_results$longitude), max(rounded_results$longitude), by = 1)
+
+#initialize an empty list to store polygons
+polygons <- list()
+
+#create polygons
+for (lat in lat_range) {
+  for (lon in lon_range) {
+    if(any(rounded_results$latitude == lat & rounded_results$longitude == lon)) {
+    #define the coordinates of the corners of the polygon
+    coords <- matrix(c(lon - 0.5, lat - 0.5,
+                       lon + 0.5, lat - 0.5,
+                       lon + 0.5, lat + 0.5,
+                       lon - 0.5, lat + 0.5,
+                       lon - 0.5, lat - 0.5),
+                     ncol = 2, byrow = TRUE)
+    #create a polygon and add it to the list
+    polygons <- c(polygons, list(Polygons(list(Polygon(coords)), ID = paste(lat, lon))))
+    }
+    
+    else {
+      
+    }
+  }
+}
+
+#create a SpatialPolygons object
+sp_polygons <- SpatialPolygons(polygons)
+```
+  
+```{r}
+rounded_results <- rounded_results %>% 
+  
+ mutate(ID = paste(latitude, longitude), mean_pct_replaceable = 100* mean_percent_replaceable, sd = 100 * sd_replaceable, 
+        suggested_samples = ifelse((site_samples - ((lb/100)*site_samples) + 5) > 20, 20, (site_samples - ((lb/100)*site_samples) + 5))) %>% 
+  
+  arrange(latitude, longitude)
+
+rownames(rounded_results) <- rounded_results$ID
+
+spdf <- SpatialPolygonsDataFrame(sp_polygons, data = rounded_results)
+```
+
+
+```{r}
+#creating color palette
+palette <- colorNumeric(palette = "YlOrRd", domain = spdf$mean_pct_replaceable)
+
+#make map
+map <-leaflet(spdf) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>% 
+  addPolygons(color = ~palette(mean_pct_replaceable),
+              weight = 1,
+              opacity = 1,
+              fillOpacity = 0.7,
+              fillColor = ~palette(mean_pct_replaceable),
+              popup = ~paste("mean = ", round(mean_pct_replaceable, 1), "%, sd = ", round(sd, 0), "%"))
+map <- addLegend(
+    map = map,
+    position = "bottomright",
+    pal = palette,
+    values = spdf$mean_pct_replaceable,
+    title = "Avg % Replaceable",
+    labFormat = labelFormat(suffix = "%"))
+
+saveWidget(map, file = "~/NOAA Work/maps/map.html")
+```
+
+```{r}
+#creating color palette
+palette_lb <- colorNumeric(palette = "YlOrRd", domain = spdf$lb)
+
+#map showing lower bound
+map_lb <-leaflet(spdf) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>% 
+  addPolygons(color = ~palette_lb(lb),
+              weight = 1,
+              opacity = 1,
+              fillOpacity = 0.7,
+              fillColor = ~palette_lb(lb),
+              popup = ~paste("mean = ", round(lb, 1), "%"))
+map_lb <- addLegend(
+    map = map_lb,
+    position = "bottomright",
+    pal = palette_lb,
+    values = spdf$lb,
+    title = "Avg % Replaceable(lb)",
+    labFormat = labelFormat(suffix = "%"))
+
+saveWidget(map_lb, file = "~/NOAA Work/maps/map_lowerbound.html")
+```
+
+```{r}
+#creating color palette
+palette_num <- colorNumeric(palette = "YlOrRd", domain = spdf$number_replacements)
+
+#map showing avg number of replacements
+map_num_rep <-leaflet(spdf) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>% 
+  addPolygons(color = ~palette_num(number_replacements),
+              weight = 1,
+              opacity = 1,
+              fillOpacity = 0.7,
+              fillColor = ~palette_num(number_replacements),
+              popup = ~paste("mean = ", round(number_replacements, 1), "sd = ", round(sd_num, 1)))
+map_num_rep <- addLegend(
+    map = map_num_rep,
+    position = "bottomright",
+    pal = palette_num,
+    values = spdf$number_replacements,
+    title = "Avg number Replaceable")
+
+saveWidget(map_num_rep, file = "~/NOAA Work/maps/map_number_of_replacements.html")
+```
+
+
+```{r}
+#creating color palette
+palette_num_lb <- colorNumeric(palette = "YlOrRd", domain = spdf$num_lb)
+
+#map showing lower bound (95%) number of replacements
+map_num_rep_lb <-leaflet(spdf) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>% 
+  addPolygons(color = ~palette_num_lb(num_lb),
+              weight = 1,
+              opacity = 1,
+              fillOpacity = 0.7,
+              fillColor = ~palette_num(num_lb),
+              popup = ~paste(round(num_lb, 1)))
+map_num_rep_lb <- addLegend(
+    map = map_num_rep_lb,
+    position = "bottomright",
+    pal = palette_num_lb,
+    values = spdf$num_lb,
+    title = "Lower Bound of Number Replaceable")
+
+saveWidget(map_num_rep_lb, file = "~/NOAA Work/maps/map_number_of_replacements_lowerbound.html")
+```
+
+```{r}
+#creating color palette
+palette_samples <- colorNumeric(palette = "YlOrRd", domain = spdf$site_samples)
+
+#creating a map for historical number of samples taken at each location
+map_samples <-leaflet(spdf) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>% 
+  addPolygons(color = ~palette_samples(site_samples),
+              weight = 1,
+              opacity = 1,
+              fillOpacity = 0.7,
+              fillColor = ~palette_samples(site_samples),
+              popup = ~paste("mean = ", round(site_samples, 1), " samples"))
+map_samples <- addLegend(
+    map = map_samples,
+    position = "bottomright",
+    pal = palette_samples,
+    values = spdf$site_samples,
+    title = "Historical Average Sample Size")
+
+saveWidget(map_samples, file = "~/NOAA Work/maps/map_total_samples.html")
+```
+
+
+
+
+```{r}
+#creating color palette
+palette_low_oxy_depth <- colorNumeric(palette = "YlOrRd", domain = spdf$low_oxy_depth)
+
+#creating a map for minimum oxygen depth
+map_min_oxy_prs <-leaflet(spdf) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>% 
+  addPolygons(color = ~palette_low_oxy_depth(low_oxy_depth),
+              weight = 1,
+              opacity = 1,
+              fillOpacity = 0.7,
+              fillColor = ~palette_low_oxy_depth(low_oxy_depth),
+              popup = ~paste("mean = ", round(low_oxy_depth, 1), "m"))
+map_min_oxy_prs <- addLegend(
+    map = map_min_oxy_prs,
+    position = "bottomright",
+    pal = palette_low_oxy_depth,
+    values = spdf$low_oxy_depth,
+    title = "Avg low oxygen depth point",
+    labFormat = labelFormat(suffix = "m"))
+
+saveWidget(map_min_oxy_prs, file = "~/NOAA Work/maps/map_min_oxygen_depth.html")
+```
+
+
+```{r}
+#creating color palette
+palette_suggested <- colorNumeric(palette = "YlOrRd", domain = spdf$suggested_samples)
+
+#creating a map for the number of samples we should take (my suggestion, 95%)
+map_suggested <-leaflet(spdf) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>% 
+  addPolygons(color = ~palette_suggested(suggested_samples),
+              weight = 1,
+              opacity = 1,
+              fillOpacity = 0.7,
+              fillColor = ~palette_suggested(suggested_samples),
+              popup = ~paste(round(suggested_samples, 0)))
+map_suggested <- addLegend(
+    map = map_suggested,
+    position = "bottomright",
+    pal = palette_suggested,
+    values = spdf$suggested_samples,
+    title = "Suggested Number of Titrations")
+
+saveWidget(map_suggested, file = "~/NOAA Work/maps/map_suggestions.html")
+```
+
+
+
+
+
+```{r}
+write_csv(results, "~/NOAA Work/ResultsData.csv")
+```

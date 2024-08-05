@@ -1,0 +1,392 @@
+---
+title: "App Development Teehee"
+output: pdf_document
+date: "2024-06-12"
+---
+
+```{r}
+#load libraries
+library(tidyverse)
+library(readr)
+library(lubridate)
+library(ggplot2)
+library(readxl)
+library(broom)
+library(patchwork)
+library(car)
+library(shiny)
+library(shinydashboard)
+library(shinyWidgets)
+library(raster)
+library(sf)
+library(leaflet)
+```
+
+```{r}
+set.seed(12030)
+big_data <- read_csv("~/Desktop/NOAA/NOAA Work/Shiny Data/big_data.csv")
+sf <- read_csv("~/Desktop/NOAA/NOAA Work/Shiny Data/sf.csv")
+```
+
+```{r}
+replacements_pct <- function(calibration_data, raw_data, threshold) {
+ 
+  replaceable <- 0
+  
+  
+  for (i in 1:length(calibration_data)) {
+    new_data <- calibration_data
+    index <- sample(1:length(calibration_data), i)
+    new_data[index] <- raw_data[index]
+    
+    if (mean(abs((new_data - calibration_data) / calibration_data)) <= threshold) {
+      replaceable <- replaceable + 1
+      
+    }
+    
+  }
+  
+  return(replaceable)
+}
+```
+
+```{r}
+replacements_unit <- function(calibration_data, raw_data, threshold) {
+ 
+  replaceable <- 0
+  
+  
+  for (i in 1:length(calibration_data)) {
+    new_data <- calibration_data
+    index <- sample(1:length(calibration_data), i)
+    new_data[index] <- raw_data[index]
+    
+    if (mean(abs(new_data - calibration_data)) <= threshold) {
+      replaceable <- replaceable + 1
+      
+    }
+    
+  }
+  
+  return(replaceable)
+}
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+ui <- dashboardPage(
+  dashboardHeader(title = h4(HTML("Optimizing Ocean Oxygen Sampling"))),
+  
+  #set up tab system
+  dashboardSidebar(
+    sidebarMenu(
+      menuItem("Info", tabName = "Info", icon = icon("info-circle")),
+      menuItem("Map", tabName = "Map", icon = icon("map-marked-alt")),
+      menuItem("Interactive Plots", tabName = "IntPlots", icon = icon("cog")),
+      menuItem("Plots", tabName = "Plots", icon = icon("line-chart"))
+    )
+  ),
+  
+  #set up contents of each tab
+  dashboardBody(
+    tabItems(
+      tabItem(tabName = "Info",
+              
+              h2("Background"),
+              
+              p("NOAA leads annual ocean acidification research cruises in locations surrounding the USA. This analysis specifically focuses on the ECOA 2022, WCOA 2021, and GOMECC 2021 cruises which take place in the East Coast, West Coast, and Gulf of Mexico respectively. This omits cruises in the Alaska, Arctic, and Pacific Islands. On each cruise two types of oxygen samples are taken. \n 
+                1. samples from the CTD oxygen sensor that provides data for a full oxygen profile, which is to say continuous data. \n 
+                2. titration samples from the bottles attached to the CTD. These bottles collect water samples at various depths which are used for calculating the amount of dissolved oxygen via titration. \n
+                Although more accurate, the titration data is time-costly and consumes resources compared to the sensor data which is much more efficient to collect. Therefore it is important that we only take as many titrations as necessary to recieve accurate enough data. This app provides the findings from this analysis in a clear and interpretable way in order for simple usage by cruise personnel."),
+              
+              h2("Data"),
+              
+              p("Data was obtained from ECOA 2022, WCOA 2021, and GOMECC 2021. Each cruise had a dataset containing the raw CTD sensor data and the calibrated CTD sensor data. The calibrated CTD sensor data is calculated through correcting the raw CTD sensor data based on the titration data. The data was filtered so that each row represented one bottle sample. Within each row, the depth, raw sensor data, calibrated sensor data, titration data, temperature, salinity, location, and depth of station were measured."),
+              
+              h2("Analysis"),
+              
+              p("The number of titrations that could be replaced was estimated through calculating how many raw CTD sensor data points in any given profile could be replaced with the calibrated data points before the profile deviated by 1% or more. Then a suggested number of titrations was calculated by subtracting that number from the historical sample size of any given station. These results are visualized in an interactive map seen in the Map tab. Other findings are shown in the plotiing tabs (interactive plots and plots)."),
+              
+              p("In order to change the threshold from 1% to another value in umol/kg or %, feel free to edit the boxes below. All of the maps and plots in the other tabs will change based on this value once the 'Update App' button is clicked."),
+              
+              box(numericInput("threshold",
+                              "Select a Threshold Value",
+                              min = 0, max = 100,
+                              value = 1,
+                              step = 0.1)),
+              
+              box(selectInput("unit", 
+                              "Select a Unit Type", 
+                              c("%", "umol/kg"))),
+              
+              actionButton("update", "Update App")
+
+              ),
+      
+      tabItem(tabName = "Map",
+              h2("Variable Key"),
+                
+                strong("mean_percent_replaceable"), span("is the average proportion of titrations that can be removed from any given station within that area and not deviate above the threshold."),
+              
+              br(), br(),
+                 
+                strong("low_oxy_depth"), span("is the average depth where the oxygen is the lowest for any given area."),
+              
+              br(), br(),
+                
+                strong("mean_max_depth"), span("is the average depth of the stations for each area."),
+              
+              br(), br(),
+                
+                strong("number_replacements"), span("is the average number of titrations that can be removed from any given station within that area and not deviate above the threshold."),
+              
+              br(), br(),
+                
+                strong("site_samples"), span("is the average number of titrations completed for the stations of each given area. This variable is of high importance because it heavily influences the number of suggested titrations."),
+              
+              br(), br(),
+                
+                strong("lb"), span("is the 0.05 quantile of the proportion of titrations that can be removed for each area. This variable is meant to provide a very 'safe' estimate for the number of titrations that should be taken as we would rather oversample than undersample."),
+              
+              br(), br(),
+                
+                strong("num_lb"), span("is the 0.05 quantile of the number of titrations that can be removed for each area. This variable is meant to provide a very 'safe' estimate for the number of titrations that should be taken as we would rather oversample than undersample."),
+              
+              br(), br(),
+                
+                strong("number_of_stations"), span("is the number of stations within each area. This can also be viewed as 'n', the sample size."),
+              
+              br(), br(),
+                
+                strong("suggested_samples"), span("is the suggested number of titrations that should be done for each station in that area. A range is also provided with this map. suggested_samples = site_samples - (site_samples * mean_percent_replaceable)"),
+              
+              br(), br(),
+              
+              fluidRow(
+                
+                br(),
+                
+                box(width = 12, leafletOutput("map", height = 700),
+                    
+                    pickerInput("var", #user chooses variable to plot
+                                "Select a Variable",
+                                choices = names(sf)[c(3, 6, 8:9, 11:13, 16, 20)],
+                                selected = "suggested_samples"))
+              )),
+      tabItem(tabName = "IntPlots", #could add a checkbox for calibration data to be included
+              fluidRow(
+                box(width = 12, plotOutput("Comparison"),
+                    pickerInput("Cruise", "Select a Cruise",
+                                choices = unique(big_data$cruise),
+                                selected = "WCOA 2021"),
+                    uiOutput("station_max"),
+                    checkboxInput("cal", "Include Calibrated Sensor Data", value = FALSE))
+                )),
+      
+      tabItem(tabName = "Plots",
+              fluidRow(
+                imageOutput("Coasts"),
+                box(width = 6, plotOutput("distribution")),
+                box(width = 6, plotOutput("boxplot"))
+              ))
+              ))
+    )
+  
+  
+```
+
+```{r}
+server <- function(input, output, session) {
+  
+  output$station_max <- renderUI({
+    
+    stations <- big_data %>% 
+      filter(cruise == input$Cruise) %>% 
+      pull(Station)
+    
+     numericInput("station", "Select a Station",
+                                min = 1, max = max(stations),
+                                value = 108,
+                                step = 1)
+  })
+    
+data_reactive <- eventReactive(input$update,{
+  big_data2 <- big_data %>% 
+  mutate(raw_oxy_change = raw_oxygen - lag(raw_oxygen, n = 1)) %>% 
+  filter(raw_oxy_change != 0) %>% 
+  dplyr::select(!raw_oxy_change) %>% 
+  group_by(Station, cruise) %>% 
+  mutate(replaceables = ifelse(input$unit == "%", replacements_pct(ctdoxy, raw_oxygen, input$threshold/100), replacements_unit(ctdoxy, raw_oxygen, input$threshold))) %>% 
+  mutate(percent_replaceable = replaceables / n(), samples = n()) %>% 
+  ungroup() %>% 
+  arrange(desc(samples)) %>% 
+  slice(-c(20:37)) %>% 
+  arrange(cruise, Station) %>% 
+  mutate(random_choices = runif(n()) < percent_replaceable) %>% 
+  mutate(new_profile = ifelse(random_choices, raw_oxygen, ctdoxy))
+})
+
+sf_data <- reactive({
+
+  
+  rounded_data <- data_reactive() %>% 
+  mutate(latitude = 2* round(latitude / 2), longitude = 2 * round(longitude / 2), station_change = ifelse(Station - lag(Station, n = 1) != 0, 1, 0)) %>% 
+  group_by(latitude, longitude) %>% 
+  summarize(mean_percent_replaceable = mean(percent_replaceable), sample_size = n(), sd_replaceable = sd(percent_replaceable),
+            low_oxy_depth = median(median(ifelse(oxygen == min(oxygen), ctdprs, NA), na.rm = TRUE)), 
+            low_oxy_depth_prop = median(low_oxy_depth / max_depth), mean_max_depth = mean(max_depth),
+            number_replacements = mean(replaceables), sd_num = sd(replaceables), site_samples = mean(samples),
+            lb = 100 * quantile(percent_replaceable, 0.05), num_lb = quantile(replaceables, 0.05), min_pct_replaceable = min(percent_replaceable), max_pct_replaceable = max(percent_replaceable),
+            number_of_stations = sum(station_change))
+rounded_data$number_of_stations[73] <- 1
+
+#define range of latitudes and longitudes
+lat_range <- seq(min(rounded_data$latitude), max(rounded_data$latitude), by = 2)
+lon_range <- seq(min(rounded_data$longitude), max(rounded_data$longitude), by = 2)
+
+#initialize an empty list to store polygons
+polygons <- list()
+
+#create polygons
+for (lat in lat_range) {
+  for (lon in lon_range) {
+    if(any(rounded_data$latitude == lat & rounded_data$longitude == lon)) {
+    #define the coordinates of the corners of the polygon
+    coords <- matrix(c(lon - 1, lat - 1,
+                       lon + 1, lat - 1,
+                       lon + 1, lat + 1,
+                       lon - 1, lat + 1,
+                       lon - 1, lat - 1),
+                     ncol = 2, byrow = TRUE)
+    #create a polygon and add it to the list
+    polygons <- c(polygons, list(Polygons(list(Polygon(coords)), ID = paste(lat, lon))))
+    }
+    
+    else {
+      
+    }
+  }
+}
+
+#create a SpatialPolygons object
+sp_polygons <- SpatialPolygons(polygons)
+
+#run code for formula without adjustments
+rounded_data <- rounded_data %>% 
+ mutate(ID = paste(latitude, longitude), mean_pct_replaceable = 100* mean_percent_replaceable, sd = 100 * sd_replaceable, 
+        suggested_samples = ifelse((site_samples - ((mean_percent_replaceable)*site_samples)) > 20, 20, site_samples - ((mean_percent_replaceable)*site_samples)),
+        suggested_samples = ifelse((site_samples - ((mean_percent_replaceable)*site_samples)) < 3, 3, site_samples - ((mean_percent_replaceable)*site_samples)),
+        min_suggested = ifelse(site_samples - (min_pct_replaceable*site_samples) < 5, 5, site_samples - (min_pct_replaceable*site_samples)), 
+        max_suggested = ifelse(site_samples - (max_pct_replaceable*site_samples) < 3, 3, site_samples - (max_pct_replaceable*site_samples))) %>% 
+
+  arrange(latitude, longitude)
+
+rownames(rounded_data) <- rounded_data$ID
+
+spdf <- SpatialPolygonsDataFrame(sp_polygons, data = rounded_data)
+
+sf <- st_as_sf(spdf)
+return(sf)
+
+})
+  
+  
+  output$map <- renderLeaflet({
+    
+    if(as.character(input$var) == "suggested_samples"){
+  #creating color palette
+palette <- colorNumeric(palette = "YlOrRd", domain = sf_data()[[input$var]])
+
+#creating a map for the number of samples we should take (my suggestion, 95%)
+map <-leaflet(sf_data()) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>% 
+  addPolygons(color = ~palette(sf_data()[[input$var]]),
+              weight = 1,
+              opacity = 1,
+              fillOpacity = 0.7,
+              fillColor = ~palette(sf_data()[[input$var]]),
+              popup = ~paste("Avg: ", round(sf_data()[[input$var]], 0), "<br> Range: ", round(sf_data()$max_suggested, 0), " to ", round(sf_data()$min_suggested, 0))) %>% 
+  addLegend(
+    position = "bottomright",
+    pal = palette,
+    values = sf_data()[[input$var]],
+    title = "Suggested Samples")
+    }
+    
+    else{
+        #creating color palette
+palette <- colorNumeric(palette = "YlOrRd", domain = sf_data()[[input$var]])
+
+#creating a map for the number of samples we should take (my suggestion, 95%)
+map <-leaflet(sf_data()) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>% 
+  addPolygons(color = ~palette(sf_data()[[input$var]]),
+              weight = 1,
+              opacity = 1,
+              fillOpacity = 0.7,
+              fillColor = ~palette(sf_data()[[input$var]]),
+              popup = ~paste(round(sf_data()[[input$var]], 2))) %>% 
+  addLegend(
+    position = "bottomright",
+    pal = palette,
+    values = sf_data()[[input$var]],
+    title = input$var)
+    }
+})
+  
+output$Coasts <- renderImage({
+  list(src = "~/Desktop/NOAA/NOAA Work/Shiny Data/coasts.png")
+  }, deleteFile = FALSE)
+
+output$Comparison <- renderPlot({
+ # if(station is in list of stations for cruise){
+  if(input$cal == FALSE){
+  data_reactive() %>% 
+  filter(cruise == input$Cruise & Station == input$station) %>% 
+  ggplot() +
+  geom_point(aes(x = raw_oxygen, y = ctdprs), color  = "darkblue") +
+  geom_line(aes(x = raw_oxygen, y = ctdprs), color  = "darkblue", orientation = "y") +
+  geom_point(aes(x = oxygen, y = ctdprs), color = "red") +
+  geom_line(aes(x = oxygen, y = ctdprs), color = "red", orientation = "y") +
+  scale_y_reverse() + 
+  labs(title = "Raw Sensor Profile (Blue) Vs Titration Profile (Red)", x = "Oxygen (umol/kg)", y = "Depth (m)", caption = str_glue("{input$Cruise}, {input$station}"))
+  }
+  else{
+  data_reactive() %>% 
+  filter(cruise == input$Cruise & Station == input$station) %>% 
+  ggplot() +
+  geom_point(aes(x = raw_oxygen, y = ctdprs), color  = "darkblue") +
+  geom_line(aes(x = raw_oxygen, y = ctdprs), color  = "darkblue", orientation = "y") +
+  geom_point(aes(x = oxygen, y = ctdprs), color = "red") +
+  geom_line(aes(x = oxygen, y = ctdprs), color = "red", orientation = "y") +
+  geom_point(aes(x = ctdoxy, y = ctdprs), color = "darkgreen") +
+  geom_line(aes(x = ctdoxy, y = ctdprs), color = "darkgreen", orientation = "y") +
+  scale_y_reverse() + 
+  labs(title = "Raw Sensor Profile (Blue) Vs Titration Profile (Red) Vs Calibrated Sensor Profile (Green)", x = "Oxygen (umol/kg)", y = "Depth (m)", caption = str_glue("{input$Cruise}, {input$station}"))  
+  }
+  #else{
+    #print(str_glue("{input$station} does not exist for this cruise"))
+  #}
+})
+
+output$boxplot <- renderPlot({
+ggplot(data = data_reactive(), aes(x = percent_replaceable, y = cruise)) +
+  geom_boxplot() + 
+  labs(title = "Percent Removable Samples by Cruise", x = "% Removable", y = "Cruise")
+})
+
+output$distribution <- renderPlot({
+ggplot(data = data_reactive(), aes(x = percent_replaceable)) +
+  geom_histogram(binwidth = .05) +
+  labs(title = "Distribution of the Removability of Profiles", y = "Number of Profiles", x = "% Removable")
+})
+
+}
+
+```
+
+```{r}
+shinyApp(ui, server)
+```
+

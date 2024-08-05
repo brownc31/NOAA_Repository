@@ -1,0 +1,56 @@
+---
+title: "East Coast Coding"
+output: pdf_document
+date: "2024-06-12"
+---
+
+
+```{r}
+#load libraries
+library(tidyverse)
+library(lubridate)
+library(pwr)
+library(ggplot2)
+library(readxl)
+library(purrr)
+library(plotly)
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+# Read in data
+ecoa1 <- read_csv("~/NOAA Work/East Coast/ECOA-1/ECOA-1-CLEAN.csv")
+ecoa2 <- read_csv("~/NOAA Work/East Coast/ECOA-2/ECOA-2-CLEAN.csv")
+ecoa3 <- read_csv("~/NOAA Work/East Coast/ECOA-3/ECOA-3-CLEAN.csv")
+gom2e <- read_csv("~/NOAA Work/East Coast/GOMECC-2-E/GOMECC-2-E-CLEAN.csv")
+gunter <- read_csv("~/NOAA Work/East Coast/Gordon Gunter/Gunter-CLEAN.csv")
+```
+
+```{r}
+# Creating one full dataset 
+east_all <- rbind(ecoa1, ecoa2, ecoa3, gom2e, gunter) %>% 
+  mutate(locale = rep("East", n()))
+```
+
+```{r}
+write_csv(east_all, "~/NOAA Work/East Coast/EAST-CLEAN.csv")
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+ggplot() +
+  geom_smooth(data = east_all, aes(x = oxygen, y = ctdprs), orientation = "y") +
+  geom_smooth(data = east_all, aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red") +
+  scale_y_reverse() +
+  xlim(0, 300) +
+  labs(y = "depth (m)", x = "oxygen (umol/kg)")
+```
+
+```{r}
+mean(abs(east_all$oxygen - east_all$ctdoxy), na.rm = TRUE)
+```
+
+
+

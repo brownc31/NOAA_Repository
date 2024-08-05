@@ -1,0 +1,52 @@
+---
+title: "West Coast Coding"
+output: pdf_document
+date: "2024-06-12"
+---
+
+```{r}
+#load libraries
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(readxl)
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+# Read in data
+wcoa1 <- read_csv("~/NOAA Work/West Coast/WCOA-1/WCOA-1-CLEAN.csv")
+wcoa2 <- read_csv("~/NOAA Work/West Coast/WCOA-2/WCOA-2-CLEAN.csv")
+wcoa3 <- read_csv("~/NOAA Work/West Coast/WCOA-3/WCOA-3-CLEAN.csv")
+wcoa4 <- read_csv("~/NOAA Work/West Coast/WCOA-4/WCOA-4-CLEAN.csv")
+wcoa5 <- read_csv("~/NOAA Work/West Coast/WCOA-5/WCOA-5-CLEAN.csv")
+wcoa6 <- read_csv("~/NOAA Work/West Coast/WCOA-6/WCOA-6-CLEAN.csv")
+wcoa7 <- read_csv("~/NOAA Work/West Coast/WCOA-7/WCOA-7-CLEAN.csv")
+```
+
+```{r}
+west_all <- rbind(wcoa1, wcoa2, wcoa3, wcoa4, wcoa5, wcoa6, wcoa7) %>% 
+  mutate(locale = rep("West", n()))
+```
+
+```{r}
+write_csv(west_all, "~/NOAA Work/West Coast/WEST-CLEAN.csv")
+```
+
+-------------------------------------------------------------------------------
+
+```{r}
+ggplot() +
+  geom_smooth(data = west_all, aes(x = oxygen, y = ctdprs), orientation = "y") +
+  geom_smooth(data = west_all, aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red") +
+  scale_y_reverse() +
+  xlim(0, 300) +
+  labs(y = "depth (m)", x = "oxygen (umol/kg)")
+```
+
+```{r}
+mean(abs(west_all$oxygen - west_all$ctdoxy), na.rm = TRUE)
+```
+
+
