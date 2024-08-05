@@ -1,0 +1,84 @@
+---
+title: "ECOA-1"
+output: pdf_document
+date: "2024-06-12"
+---
+
+```{r}
+#load libraries
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(readxl)
+```
+
+-------------------------------------------------------------------------------
+
+```{r}
+ecoa1 <- read_excel("~/NOAA Work/East Coast/ECOA-1/33GG20150619_GLODAP (1).xlsx") %>% 
+  slice(-1)
+
+colnames(ecoa1) <- ecoa1[1, ]
+
+ecoa1 <- ecoa1 %>% 
+  slice(-1, -2, -2502) %>% 
+  janitor::clean_names() %>% 
+  filter(oxygen > 0 | ctdoxy > 0) %>%
+  filter(oxygen_flag_w == 1 | oxygen_flag_w == 2 | oxygen_flag_w == 6) %>% 
+  mutate(oxygen = if_else(oxygen < 0, NA, oxygen)) %>% 
+  mutate(ctdoxy = if_else(ctdoxy < 0, NA, ctdoxy)) %>%
+  mutate(date = dmy(str_glue("{day}, {month}, {year}"))) %>% 
+  select(stnnbr, oxygen, ctdoxy, latitude, longitude, ctdtmp, ctdsal, ctdprs, date) %>% 
+  mutate(cruise = rep("ECOA1", n())) %>%
+  mutate(across(1:8, as.numeric))
+
+write_csv(ecoa1, "~/NOAA Work/East Coast/ECOA-1/ECOA-1-CLEAN.csv")
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+ecoa1 %>% 
+  group_by(stnnbr) %>% 
+  count(n())
+```
+
+```{r}
+prof1 <- ecoa1 %>% 
+  filter(stnnbr == 146) 
+```
+
+```{r}
+ggplot() +
+  geom_smooth(data = prof1, aes(x = oxygen, y = ctdprs), orientation = "y") +
+  geom_smooth(data = prof1, aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red") +
+  scale_y_reverse() +
+  xlim(0, 300) + 
+  labs(y = "depth (m)", x = "oxygen (umol/kg)")
+```                                                                 
+
+```{r}
+prof1 %>%
+    mutate(oxychange = abs(oxygen - lag(oxygen, n = 1))) %>% 
+    mutate(depthchange = abs(ctdprs - lag(ctdprs, n = 1))) %>% 
+    mutate(ROC = round(oxychange/depthchange, 3)) %>% 
+    select(ctdprs, ROC, oxygen)
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+ggplot() +
+  geom_smooth(data = ecoa1, aes(x = oxygen, y = ctdprs), orientation = "y") +
+  geom_smooth(data = ecoa1, aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red") +
+  scale_y_reverse() +
+  xlim(0, 300) +
+  labs(y = "depth (m)", x = "oxygen (umol/kg)")
+```
+
+```{r}
+mean(abs(ecoa1$oxygen - ecoa1$ctdoxy), na.rm = TRUE)
+```
+
+
+

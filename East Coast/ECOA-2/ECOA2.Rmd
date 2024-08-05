@@ -1,0 +1,158 @@
+---
+title: "ECOA-2"
+output: pdf_document
+date: "2024-06-12"
+---
+
+```{r}
+#load libraries
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(readxl)
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+# All ECOA-2 data cleaning
+ecoa2 <- read_excel("~/NOAA Work/East Coast/ECOA-2/33HH20180625_GLODAP.xlsx") %>% 
+  slice(-1)
+
+colnames(ecoa2) <- ecoa2[1, ]
+
+ecoa2 <- ecoa2 %>% 
+  slice(-1, -2, -3277) %>% 
+  janitor::clean_names() %>% 
+  filter(oxygen > 0 | ctdoxy > 0) %>%
+  filter(oxygen_flag_w == 1 | oxygen_flag_w == 2 | oxygen_flag_w == 6) %>% 
+  mutate(oxygen = if_else(oxygen < 0, NA, oxygen)) %>% 
+  mutate(ctdoxy = if_else(ctdoxy < 0, NA, ctdoxy)) %>%
+  mutate(date = dmy(str_glue("{day}, {month}, {year}"))) %>% 
+  select(stnnbr, oxygen, ctdoxy, latitude, longitude, ctdtmp, ctdsal, ctdprs, date) %>% 
+  mutate(cruise = rep("ECOA2", n())) %>%
+  mutate(across(1:8, as.numeric))
+
+write_csv(ecoa2, "~/NOAA Work/East Coast/ECOA-2/ECOA-2-CLEAN.csv")
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+ecoa2 %>% 
+  group_by(stnnbr) %>% 
+  count(n())
+```
+
+```{r}
+prof1 <- ecoa2 %>% 
+  filter(stnnbr == 64) 
+```
+
+```{r}
+ggplot() +
+  geom_smooth(data = prof1, aes(x = oxygen, y = ctdprs), orientation = "y") +
+  geom_smooth(data = prof1, aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red") +
+  scale_y_reverse() +
+  xlim(0, 300) + 
+  labs(y = "depth (m)", x = "oxygen (umol/kg)")
+```                                                                 
+
+```{r}
+prof1 %>%
+    mutate(oxychange = abs(oxygen - lag(oxygen, n = 1))) %>% 
+    mutate(depthchange = abs(ctdprs - lag(ctdprs, n = 1))) %>% 
+    mutate(ROC = round(oxychange/depthchange, 3)) %>% 
+    select(ctdprs, ROC, oxygen)
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+ggplot() +
+  geom_smooth(data = ecoa2, aes(x = oxygen, y = ctdprs), orientation = "y") +
+  geom_smooth(data = ecoa2, aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red") +
+  scale_y_reverse() +
+  xlim(0, 300) +
+  labs(y = "depth (m)", x = "oxygen (umol/kg)")
+```
+
+```{r}
+mean(abs(ecoa2$oxygen - ecoa2$ctdoxy), na.rm = TRUE)
+```
+
+--------------------------------------------------------------------------------
+
+**Extreme Cases**
+
+```{r}
+extreme0 <- results %>% 
+  filter(percent_replacable == 0) %>% 
+  filter(cruise == "ECOA2")
+
+extreme0 %>% 
+  group_by(max_depth_bin) %>% 
+  summarize(count = round(n()/34, 2))
+
+extreme0 %>% 
+  group_by(stnnbr, cruise) %>% 
+  summarize(count = n()) %>% 
+  ungroup() %>% 
+  summarize(mean = mean(count), sd = sd(count), lq = quantile(count, 0.025), uq = quantile(count, 0.975))
+
+extreme0 %>% 
+  summarize(mean = mean(ctdtmp), sd = sd(ctdtmp), lq = quantile(ctdtmp, 0.025), uq = quantile(ctdtmp, 0.975))
+
+extreme0 %>% 
+  filter(ctdsal > 0) %>% 
+  summarize(mean = mean(ctdsal), sd = sd(ctdsal), lq = quantile(ctdsal, 0.025), uq = quantile(ctdsal, 0.975))
+```
+
+```{r}
+extreme1 <- results %>% 
+  filter(percent_replacable == 1) %>% 
+  filter(cruise == "ECOA2")
+
+extreme1 %>% 
+  #filter(max_depth_bin != "1251-1500" & max_depth_bin != "1501-1750", max_depth_bin != "1751-2000", max_depth_bin != "2001-3000", max_depth_bin != "3001-4000", max_depth_bin != "4001-5000") %>% 
+  group_by(max_depth_bin) %>% 
+  summarize(count = round(n()/653, 2))
+
+extreme1 %>% 
+  group_by(stnnbr, cruise) %>% 
+  summarize(count = n()) %>% 
+  ungroup() %>% 
+  summarize(mean = mean(count), sd = sd(count), lq = quantile(count, 0.025), uq = quantile(count, 0.975))
+
+extreme1 %>% 
+  summarize(mean = mean(ctdtmp), sd = sd(ctdtmp), lq = quantile(ctdtmp, 0.025), uq = quantile(ctdtmp, 0.975))
+
+extreme1 %>% 
+  filter(ctdsal > 0) %>% 
+  summarize(mean = mean(ctdsal), sd = sd(ctdsal), lq = quantile(ctdsal, 0.025), uq = quantile(ctdsal, 0.975))
+```
+
+```{r}
+extremeother <- results %>% 
+  filter(percent_replacable != 1 & percent_replacable != 0) %>% 
+  filter(cruise == "ECOA2")
+
+extremeother %>% 
+  #filter(max_depth_bin != "1251-1500" & max_depth_bin != "1501-1750", max_depth_bin != "1751-2000", max_depth_bin != "2001-3000", max_depth_bin != "3001-4000", max_depth_bin != "4001-5000") %>% 
+  group_by(max_depth_bin) %>% 
+  summarize(count = round(n()/446, 2))
+
+extremeother %>% 
+  group_by(stnnbr, cruise) %>% 
+  summarize(count = n()) %>% 
+  ungroup() %>% 
+  summarize(mean = mean(count), sd = sd(count), lq = quantile(count, 0.025), uq = quantile(count, 0.975))
+
+extremeother %>% 
+  summarize(mean = mean(ctdtmp), sd = sd(ctdtmp), lq = quantile(ctdtmp, 0.025), uq = quantile(ctdtmp, 0.975))
+
+extremeother %>% 
+  filter(ctdsal > 0) %>% 
+  summarize(mean = mean(ctdsal), sd = sd(ctdsal), lq = quantile(ctdsal, 0.025), uq = quantile(ctdsal, 0.975))
+```
+

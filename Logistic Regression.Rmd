@@ -1,0 +1,354 @@
+---
+title: "Logistic Regression Coding"
+output: pdf_document
+date: "2024-06-12"
+---
+
+```{r}
+#load libraries
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(readxl)
+library(tidymodels)
+library(probably)
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+data <- read_csv("~/NOAA Work/West Coast/WCOA-5/WCOA-5-CLEAN.csv")
+```
+
+```{r}
+set.seed(1234)
+linear_recipe <- recipe(oxygen ~ ., data = data) %>% 
+  step_normalize(all_numeric_predictors())
+```
+
+```{r}
+linear_model <- linear_reg()
+```
+
+```{r}
+linear_workflow <- workflow() %>% 
+  add_recipe(linear_recipe) %>% 
+  add_model(linear_model)
+```
+
+```{r}
+data_split <- initial_split(data, prop = 0.75)
+
+data_train <- training(data_split)
+data_test <- testing(data_split)
+
+linear_fit <- linear_workflow %>% 
+  fit(data_train)
+```
+
+```{r}
+predictions <- predict(linear_fit, new_data = data_test)
+
+data_results <- data_test %>% bind_cols(predictions)
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+ggplot() +
+  geom_smooth(data = data_results, aes(x = oxygen, y = ctdprs), orientation = "y") +
+  geom_smooth(data = data_results, aes(x = .pred, y = ctdprs), orientation = "y") +
+  scale_y_reverse() +
+  labs(y = "depth (m)", x = "oxygen (umol/kg)")
+```
+
+
+
+
+
+
+**WCOA 2021 Training Model**
+
+
+```{r}
+#data for modeling
+prediction_data <- joined_wcoa7 %>% 
+  mutate(oxy_volt = (Sbeox0V + Sbeox1V) / 2, time = TimeS, temp = (T090C + T190C) / 2, sal = (Sal00 + Sal11) / 2) %>% 
+  select(raw_oxygen, oxy_volt, time, temp, ctdtmp, ctdprs, PrDM, ctdsal, sal, oxygen, ctdoxy, Station, Cast) %>% 
+  drop_na(oxygen, ctdoxy, raw_oxygen) %>% 
+  tibble()
+```
+
+
+```{r}
+library(mgcv)
+
+wcoa_gam_formula <- as.formula(paste("ctdoxy ~", paste("s(", names(prediction_data)[-c(11:13)], ")", collapse = " + ")))
+wcoa_gam <- gam(wcoa_gam_formula, data = prediction_data)
+```
+
+```{r}
+summary(wcoa_gam)
+prediction_data$pred <- predict(wcoa_gam, newdata = prediction_data) #3.31 units off on average, but still better than raw data
+
+
+prediction_data %>% 
+  summarize(mean_diff = mean(abs(pred-ctdoxy), na.rm = TRUE), sd_diff = sd(abs(pred-ctdoxy), na.rm = TRUE))
+
+write.csv(prediction_data, file = "~/NOAA Work/West Coast/WCOA-7/Prediction_Data.csv")
+```
+
+
+```{r}
+replacements <- c()
+station <- c()
+
+for (j in 1:133){
+g1 <- prediction_data %>% 
+  filter(ifelse(Station == 132, Cast == 2, Cast == 1)) %>% 
+  filter(Station == j)
+
+
+  replaceable <- 0
+  wcoa_gam_formula <- as.formula(paste("ctdoxy ~", paste("s(", names(prediction_data)[-c(11:14)], ")", collapse = " + ")))
+  
+  for (i in 1:length(g1$oxygen)) {
+    
+    g2 <- g1
+    new_data <- prediction_data
+    
+    index <- sample(1:length(g2$oxygen), i)
+    g2$oxygen[index] <- g2$raw_oxygen[index]
+    
+    stn <- g2$Station[index]
+    data_index <- which(new_data$Station == stn[1])[index]
+    new_data$oxygen[data_index] <- new_data$raw_oxygen[data_index]
+     
+    wcoa_gam <- gam(wcoa_gam_formula, data = new_data)
+    
+    pred_new <- predict(wcoa_gam, newdata = g2)
+
+    mean_percentage_diff <- mean(abs((pred_new - g2$pred) / g2$pred), na.rm = TRUE)
+    
+    if (mean_percentage_diff <= 0.01) {
+      replaceable <- replaceable + 1
+      
+    }
+  
+  }
+  
+   replacements <- c(replacements, replaceable)
+  station <- c(station, j)
+}
+result <- data.frame(Replaceables = replacements,
+                     Station = station)
+```
+
+```{r}
+wcoa_results <- prediction_data %>% 
+  full_join(., result, by = "Station") %>% 
+    group_by(Station) %>% 
+  mutate(sample_size = n(), percent_replaceable = Replaceables / n())
+```
+
+```{r}
+mean(wcoa_results$percent_replaceable)
+sd(wcoa_results$percent_replaceable)
+```
+
+```{r}
+ggplot(wcoa_results, aes(x = percent_replaceable, y = ctdprs)) +
+  geom_point() +
+  geom_smooth() +
+  scale_y_reverse()
+```
+
+
+--------------------------------------------------------------------------------
+
+**GOMECC-4 Training Model**
+
+```{r}
+#data for modeling
+prediction_data_gom <- joined_gom4 %>% 
+  mutate(oxy_volt = (sbeox0V + sbeox1V) / 2, time = timeS, temp = (t090C + t190C) / 2, sal = (sal00 + sal11) / 2) %>% 
+  select(raw_oxygen, oxy_volt, time, temp, ctdtmp, ctdprs, depSM, ctdsal, sal, oxygen, ctdoxy, Station, cast_number) %>% 
+  drop_na(oxygen, ctdoxy, raw_oxygen) %>% 
+  tibble()
+```
+
+
+```{r}
+library(mgcv)
+
+gom_gam_formula <- as.formula(paste("ctdoxy ~", paste("s(", names(prediction_data_gom)[-c(11:13)], ")", collapse = " + ")))
+gom_gam <- gam(gom_gam_formula, data = prediction_data_gom)
+```
+
+```{r}
+summary(gom_gam)
+prediction_data_gom$pred <- predict(gom_gam, newdata = prediction_data_gom) #3.39 units off on average, but still better than raw data
+
+
+prediction_data_gom %>% 
+  summarize(mean_diff = mean(abs(pred-ctdoxy), na.rm = TRUE), sd_diff = sd(abs(pred-ctdoxy), na.rm = TRUE)) #2.23
+
+write.csv(prediction_data_gom, file = "~/NOAA Work/Gulf of Mexico/GOMECC-4/Prediction_Data_GOM.csv")
+```
+
+
+```{r}
+replacements <- c()
+station <- c()
+
+for (j in 0:141){
+  if (j %in% prediction_data_gom$Station) {
+    
+g1 <- prediction_data_gom %>% 
+  filter(ifelse(Station == 12, cast_number == 2, cast_number == 1)) %>% 
+  filter(Station == j)
+
+
+  replaceable <- 0
+  gom_gam_formula <- as.formula(paste("ctdoxy ~", paste("s(", names(prediction_data_gom)[-c(11:14)], ")", collapse = " + ")))
+  
+  for (i in 1:length(g1$oxygen)) {
+    
+    g2 <- g1
+    new_data <- prediction_data_gom
+    
+    index <- sample(1:length(g2$oxygen), i)
+    g2$oxygen[index] <- g2$raw_oxygen[index]
+    
+    stn <- g2$Station[index]
+    data_index <- which(new_data$Station == stn[1])[index]
+    new_data$oxygen[data_index] <- new_data$raw_oxygen[data_index]
+     
+    gom_gam <- gam(gom_gam_formula, data = new_data)
+    
+    pred_new <- predict(gom_gam, newdata = g2)
+
+    mean_percentage_diff <- mean(abs((pred_new - g2$pred) / g2$pred), na.rm = TRUE)
+    
+    if (mean_percentage_diff <= 0.01) {
+      replaceable <- replaceable + 1
+      
+    }
+  
+  }
+  replacements <- c(replacements, replaceable)
+  station <- c(station, j)
+ }
+   
+}
+result_gom <- data.frame(Replaceables = replacements,
+                     Station = station)
+```
+
+```{r}
+gom_results <- prediction_data_gom %>% 
+  full_join(., result_gom, by = "Station") %>% 
+    group_by(Station) %>% 
+  mutate(sample_size = n(), percent_replaceable = Replaceables / n())
+```
+
+```{r}
+mean(gom_results$percent_replaceable)
+sd(gom_results$percent_replaceable)
+```
+
+--------------------------------------------------------------------------------
+
+
+**ECOA1 2015 Training Model**
+
+```{r}
+#data for modeling
+prediction_data_ecoa <- ecoa1_joined %>% 
+  rename(oxy_volt = Sbevolt, sal = salinity) %>% 
+  select(raw_oxygen, oxy_volt, temp, ctdtmp, ctdprs, ctdsal, sal, oxygen, ctdoxy, Station, castno, longitude, latitude) %>% 
+  drop_na(oxygen, ctdoxy, raw_oxygen) %>% 
+  tibble()
+```
+
+
+```{r}
+library(mgcv)
+
+ecoa_gam_formula <- as.formula(paste("ctdoxy ~", paste("s(", names(prediction_data_ecoa)[c(1,8)], ")", collapse = " + ")))
+ecoa_gam <- gam(ecoa_gam_formula, data = prediction_data_ecoa)
+```
+
+```{r}
+summary(ecoa_gam)
+prediction_data_ecoa$pred <- predict(ecoa_gam, newdata = prediction_data_ecoa) 
+
+
+prediction_data_ecoa %>% 
+  summarize(mean_diff = mean(abs(pred-ctdoxy), na.rm = TRUE), sd_diff = sd(abs(pred-ctdoxy), na.rm = TRUE)) 
+
+write.csv(prediction_data_ecoa, file = "~/NOAA Work/East Coast/ECOA-1/Prediction_Data_ECOA.csv")
+```
+
+
+```{r}
+replacements <- c()
+station <- c()
+
+for (j in 1:163){
+  if (j %in% prediction_data_ecoa$Station) {
+    
+g1 <- prediction_data_ecoa %>% 
+  filter(castno == 1) %>% 
+  filter(Station == j)
+
+
+  replaceable <- 0
+  ecoa_gam_formula <- as.formula(paste("ctdoxy ~", paste("s(", names(prediction_data_ecoa)[c(1,8)], ")", collapse = " + ")))
+  
+  for (i in 1:length(g1$oxygen)) {
+    
+    g2 <- g1
+    new_data <- prediction_data_ecoa
+    
+    index <- sample(1:length(g2$oxygen), i) #samples 1 titration from the station
+    g2$oxygen[index] <- g2$raw_oxygen[index]
+    
+    stn <- g2$Station[index]
+    data_index <- which(new_data$Station == stn[1])[index]
+    new_data$oxygen[data_index] <- new_data$raw_oxygen[data_index]
+     
+    ecoa_gam <- gam(ecoa_gam_formula, data = g2)
+    
+    pred_new <- predict(ecoa_gam, newdata = g2)
+
+    mean_percentage_diff <- mean(abs((pred_new - g2$pred) / g2$pred), na.rm = TRUE)
+    
+    if (mean_percentage_diff <= 0.01) {
+      replaceable <- replaceable + 1
+      
+    }
+  
+  }
+  replacements <- c(replacements, replaceable)
+  station <- c(station, j)
+ }
+   
+}
+result_ecoa <- data.frame(Replaceables = replacements,
+                     Station = station)
+```
+
+```{r}
+ecoa_results <- prediction_data_ecoa %>% 
+  full_join(., result_ecoa, by = "Station") %>% 
+    group_by(Station) %>% 
+  mutate(sample_size = n(), percent_replaceable = Replaceables / n())
+```
+
+```{r}
+mean(ecoa_results$percent_replaceable)
+sd(ecoa_results$percent_replaceable)
+```
+
+

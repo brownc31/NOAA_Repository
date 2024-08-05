@@ -1,0 +1,121 @@
+---
+title: "ECOA-3"
+output: pdf_document
+date: "2024-06-12"
+---
+
+```{r}
+#load libraries
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(readxl)
+```
+
+-------------------------------------------------------------------------------
+
+```{r}
+ecoa3 <- read_excel("~/NOAA Work/East Coast/ECOA-3/ECOA_3_CTD_MasterDataSheet_09_26_2023.xlsx") %>% 
+  slice(-1)
+
+ecoa3 <- ecoa3 %>% 
+  janitor::clean_names() %>% 
+  filter(oxygen > 0 | ctdoxy > 0) %>%
+  filter((0 < oxygen_flag_27 & oxygen_flag_27 <= 2) | oxygen_flag_27 == 6) %>% 
+  mutate(date = dmy(str_glue("{day_utc}, {month_utc}, {year_utc}"))) %>% 
+  rename(stnnbr = station_id, ctdtmp = ctdtemp_its90, ctdsal = ctdsal_pss78, ctdprs = depth) %>% 
+  mutate(oxygen = if_else(oxygen < 0, NA, oxygen)) %>% 
+  mutate(ctdoxy = if_else(ctdoxy < 0, NA, ctdoxy)) %>%
+  select(stnnbr, oxygen, ctdoxy, latitude, longitude, ctdtmp, ctdsal, ctdprs, date) %>% 
+  mutate(cruise = rep("ECOA3", n())) %>%
+  mutate(across(1:8, as.numeric))
+
+write_csv(ecoa3, "~/NOAA Work/East Coast/ECOA-3/ECOA-3-CLEAN.csv")
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+ecoa3 %>% 
+  group_by(stnnbr) %>% 
+  count(n())
+```
+
+```{r}
+prof1 <- ecoa3 %>% 
+  filter(stnnbr == 42) 
+```
+
+```{r}
+ggplot() +
+  geom_smooth(data = prof1, aes(x = oxygen, y = ctdprs), orientation = "y") +
+  geom_smooth(data = prof1, aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red") +
+  scale_y_reverse() +
+  xlim(0, 300) + 
+  labs(y = "depth (m)", x = "oxygen (umol/kg)")
+```                                                                 
+
+```{r}
+prof1 %>%
+  drop_na() %>% 
+    mutate(oxychange = abs(oxygen - lag(oxygen, n = 1))) %>% 
+    mutate(depthchange = abs(ctdprs - lag(ctdprs, n = 1))) %>% 
+    mutate(ROC = round(oxychange/depthchange, 3)) %>% 
+    select(ctdprs, ROC, oxygen)
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+ggplot() +
+  geom_smooth(data = ecoa3, aes(x = oxygen, y = ctdprs), orientation = "y") +
+  geom_smooth(data = ecoa3, aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red") +
+  scale_y_reverse() +
+  xlim(0, 300) +
+  labs(y = "depth (m)", x = "oxygen (umol/kg)")
+```
+
+```{r}
+ggplot() +
+  geom_smooth(data = ecoa3, aes(x = oxygen, y = ctdprs), orientation = "y") +
+  geom_smooth(data = ecoa3, aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red") +
+  scale_y_reverse() +
+  xlim(0, 300) +
+  labs(y = "depth (m)", x = "oxygen (umol/kg)") +
+  guides(color = FALSE)
+```
+
+```{r}
+mean(abs(ecoa3$oxygen - ecoa3$ctdoxy), na.rm = TRUE)
+```
+
+--------------------------------------------------------------------------------
+**Stage 2**
+
+```{r}
+ggplot() +
+  geom_smooth(data = prof1, aes(x = oxygen, y = ctdprs), orientation = "y") +
+  geom_smooth(data = prof1, aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red") +
+  scale_y_reverse() +
+  xlim(0, 300) + 
+  labs(y = "depth (m)", x = "oxygen (umol/kg)")
+```
+
+```{r}
+samp <- prof1[sample(nrow(prof1), size = 5, replace = FALSE),]
+```
+
+```{r}
+ggplot() +
+  geom_point(data = samp, aes(x = oxygen, y = ctdprs), orientation = "y", size = 2) +
+  geom_point(data = prof1, aes(x = oxygen, y = ctdprs), orientation = "y", color = "red") +
+  scale_y_reverse() +
+  xlim(0, 300) + 
+  labs(y = "depth (m)", x = "oxygen (umol/kg)")
+```
+
+In this case, we would be fine if we didn't sample at 5m and 38m.
+
+
+
+

@@ -1,0 +1,84 @@
+---
+title: "WCOA-3"
+output: pdf_document
+date: "2024-06-12"
+---
+
+```{r}
+#load libraries
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(readxl)
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+wcoa3 <- read_excel("~/NOAA Work/West Coast/WCOA-3/W05_WCOA2016R_djg_v2.xlsx")
+
+wcoa3 <- wcoa3 %>% 
+  mutate(date = dmy(str_glue("{DAY_UTC}, {MONTH_UTC}, {YEAR_UTC}"))) %>% 
+  janitor::clean_names() %>% 
+  rename(stnnbr = station_id, ctdprs = ctdpressure_dbar, oxygen = oxygen_umol_kg, 
+         latitude = latitude_decimal, longitude = longitude_decimal, ctdoxy = ctdoxygen_umol_kg, 
+         ctdtmp = ctdtmp_its90_deg_c, ctdsal = salinity_pss78) %>% 
+  filter(oxygen > 0 | ctdoxy > 0) %>%
+  filter(oxygen_flag == 1 | oxygen_flag == 2 | oxygen_flag == 6) %>%
+  filter(oxygen != 0 & oxygen < 8000) %>% 
+  mutate(oxygen = if_else(oxygen < 0, NA, oxygen)) %>% 
+  mutate(ctdoxy = if_else(ctdoxy < 0, NA, ctdoxy)) %>%
+  select(stnnbr, oxygen, ctdoxy, latitude, longitude, ctdtmp, ctdsal, ctdprs, date) %>% 
+  mutate(cruise = rep("WCOA3", n())) %>%
+  mutate(across(1:8, as.numeric))
+
+write_csv(wcoa3, "~/NOAA Work/West Coast/WCOA-3/WCOA-3-CLEAN.csv")
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+wcoa3 %>% 
+  group_by(stnnbr) %>% 
+  count(n())
+```
+
+```{r}
+prof1 <- wcoa3 %>% 
+  filter(stnnbr == 39) 
+```
+
+```{r}
+ggplot() +
+  geom_smooth(data = prof1, aes(x = oxygen, y = ctdprs), orientation = "y") +
+  geom_smooth(data = prof1, aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red") +
+  scale_y_reverse() +
+  xlim(0, 300) + 
+  labs(y = "depth (m)", x = "oxygen (umol/kg)")
+```                                                                 
+
+```{r}
+prof1 %>%
+  drop_na() %>% 
+    mutate(oxychange = abs(oxygen - lag(oxygen, n = 1))) %>% 
+    mutate(depthchange = abs(ctdprs - lag(ctdprs, n = 1))) %>% 
+    mutate(ROC = round(oxychange/depthchange, 3)) %>% 
+    select(ctdprs, ROC, oxygen)
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+ggplot() +
+  geom_smooth(data = wcoa3, aes(x = oxygen, y = ctdprs), orientation = "y") +
+  geom_smooth(data = wcoa3, aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red") +
+  scale_y_reverse() +
+  xlim(0, 300) +
+  labs(y = "depth (m)", x = "oxygen (umol/kg)")
+```
+
+```{r}
+mean(abs(wcoa3$oxygen - wcoa3$ctdoxy), na.rm = TRUE)
+```
+
+

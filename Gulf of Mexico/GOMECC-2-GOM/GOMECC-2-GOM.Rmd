@@ -1,0 +1,85 @@
+---
+title: "GOMECC-2"
+output: pdf_document
+date: "2024-06-12"
+---
+
+```{r}
+#load libraries
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(readxl)
+```
+
+-------------------------------------------------------------------------------
+
+```{r}
+# Data Cleaning
+gom2_gom <- read_excel("~/NOAA Work/Gulf of Mexico/GOMECC-2-GOM/GOMECC2_station_data-1.xlsx") %>% 
+  slice(-1) %>% 
+  janitor::clean_names() %>% 
+  filter(oxygen > 0 | ctdoxy > 0) %>% 
+  filter(oxygen_flag_w == 1 | oxygen_flag_w == 2 | oxygen_flag_w == 6) %>% 
+  mutate(oxygen = if_else(oxygen < 0, NA, oxygen)) %>% 
+  mutate(ctdoxy = if_else(ctdoxy < 0, NA, ctdoxy)) %>%
+  select(stnnbr, oxygen, ctdoxy, latitude, longitude, ctdtmp, ctdsal, ctdprs, date) %>% 
+  mutate(across(1:8, as.numeric)) %>% 
+  mutate(cruise = rep("GOMECC2", n())) %>% 
+  filter(longitude <= -81.6) # Narrows to gulf of mexico
+
+write_csv(gom2_gom, "~/NOAA Work/Gulf of Mexico/GOMECC-2-GOM/GOMECC-2-GOM-CLEAN.csv")
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+gom2_gom %>% 
+  group_by(stnnbr) %>% 
+  count(n())
+```
+
+```{r}
+prof1 <- gom2_gom %>% 
+  filter(stnnbr == 2) 
+```
+
+```{r}
+ggplot(data = prof1) +
+  geom_point(aes(x = oxygen, y = ctdprs), orientation = "y") +
+  geom_point(aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red") +
+  geom_smooth(aes(x = oxygen, y = ctdprs), orientation = "y", se = FALSE, color = "black") +
+  geom_smooth(aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red", se = FALSE) +
+  scale_y_reverse() +
+  xlim(0, 300) +
+  labs(title = "CTD Oxygen Profile (Red) vs Titrated Oxygen Profile (Black)", y = "depth (m)", x = "oxygen (umol/kg)", caption = "Cruise GOMECC-2, site 2")
+```                                                                 
+
+```{r}
+prof1 %>%
+  drop_na() %>% 
+    mutate(oxychange = abs(oxygen - lag(oxygen, n = 1))) %>% 
+    mutate(depthchange = abs(ctdprs - lag(ctdprs, n = 1))) %>% 
+    mutate(ROC = round(oxychange/depthchange, 3)) %>% 
+    select(ctdprs, ROC, oxygen)
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+ggplot() +
+  geom_smooth(data = gom2_gom, aes(x = oxygen, y = ctdprs), orientation = "y") +
+  geom_smooth(data = gom2_gom, aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red") +
+  scale_y_reverse() +
+  xlim(0, 300) +
+  labs(title = "CTD oxygen profile (red) vs titrated oxygen profile (blue)", y = "depth (m)", x = "oxygen (umol/kg)")
+```
+
+```{r}
+#Find average derivation
+mean(abs(gom2_gom$oxygen - gom2_gom$ctdoxy), na.rm = TRUE)
+a <- ifelse(abs(gom2_gom$oxygen - gom2_gom$ctdoxy) > 5, 1, 0) %>% na.omit()
+sum(a)/length(a) #17.7% are over 5 umol/kg off
+```
+
+

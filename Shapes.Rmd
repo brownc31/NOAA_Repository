@@ -1,0 +1,54 @@
+---
+title: "Profile Shape Analysis"
+output: pdf_document
+date: "2024-06-12"
+---
+
+```{r}
+#load libraries
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(readxl)
+library(broom)
+library(patchwork)
+library(car)
+library(htmlwidgets)
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+shaping_data <- read_csv("~/NOAA Work/ALL-CLEAN.csv") 
+```
+
+```{r}
+rounded_shaping_data <- shaping_data %>% 
+  mutate(latitude_round = round(latitude, 0), longitude_round = round(longitude, 0))
+```
+
+```{r}
+one_latlong <- rounded_shaping_data %>% 
+  filter(latitude_round == 28, longitude_round == -90, stnnbr == 23)
+
+ggplot(one_latlong, aes(x = ctdoxy, y = ctdprs, color = stnnbr), orientation = "y") +
+ geom_point() +
+ geom_smooth(method = "loess", se = FALSE, orientation = "y") +
+  scale_y_reverse() +
+  labs() +
+  guides(color = "none")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
