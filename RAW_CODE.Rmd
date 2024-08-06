@@ -23,7 +23,7 @@ library(janitor)
 **WCOA 2021**
 
 ```{r}
-joined_wcoa7 <- read_csv("~/Desktop/NOAA/NOAA_Repository/WCOA/WCOA-6/WCOA-2021-CLEAN.csv")
+joined_wcoa7 <- read_csv("~/Desktop/NOAA/NOAA_Repository/WCOA/WCOA-6/WCOA-2021-CLEAN.csv") # <-- WCOA <-- WCOA-6
 ```
 
 --------------------------------------------------------------------------------
@@ -31,20 +31,21 @@ joined_wcoa7 <- read_csv("~/Desktop/NOAA/NOAA_Repository/WCOA/WCOA-6/WCOA-2021-C
 **GOMECC-4**
 
 ```{r}
-joined_gom4 <- read_csv("~/Desktop/NOAA/NOAA_Repository/GOMECC/GOMECC-4/GOMECC-4-CLEAN.csv")
+joined_gom4 <- read_csv("~/Desktop/NOAA/NOAA_Repository/GOMECC/GOMECC-4/GOMECC-4-CLEAN.csv") # <-- GOMECC <-- GOMECC-4
 ```
 
 --------------------------------------------------------------------------------
 **ECOA3**
 
 ```{r, results = 'hide'}
-joined_ecoa3 <- read_csv("~/Desktop/NOAA/NOAA_Repository/ECOA/ECOA-3/ECOA-3-CLEAN.csv")
+joined_ecoa3 <- read_csv("~/Desktop/NOAA/NOAA_Repository/ECOA/ECOA-3/ECOA-3-CLEAN.csv") # <-- ECOA <-- ECOA-3
 ```
 
 --------------------------------------------------------------------------------
 **Combining data**
 
 ```{r}
+#adding to data set by binning
 big_data <- rbind(joined_ecoa3, joined_gom4, joined_wcoa7) %>% 
   group_by(Station, cruise) %>% 
   mutate(max_depth = max(ctdprs)) %>% 
@@ -94,7 +95,7 @@ big_data <- rbind(joined_ecoa3, joined_gom4, joined_wcoa7) %>%
   mutate(region = ifelse(latitude <= 31 & latitude >= 26 & longitude >= -98 & longitude <= -81.5 & region != "Mississippi River Outlet", "Upper Gulf", region)) %>%
   mutate(region = ifelse(latitude < 26 & latitude >= 18 & longitude >= -98 & longitude <= -80, "Lower Gulf", region))
 
-write_csv(big_data, "~/Desktop/NOAA/NOAA Work/Shiny Data/big_data.csv")
+write_csv(big_data, "~/Desktop/NOAA/NOAA_Repository/Shiny Data/big_data.csv")
 ```
 
 --------------------------------------------------------------------------------
@@ -135,6 +136,7 @@ ggplot() +
 **Replacing Calibrated Data with Raw Data**
 
 ```{r}
+#main function behind the analysis
 set.seed(12030)
 replacements <- function(calibration_data, raw_data, threshold) {
  
@@ -158,6 +160,7 @@ replacements <- function(calibration_data, raw_data, threshold) {
 ```
 
 ```{r}
+#additional cleaning to data
 set.seed(12030)
 big_data2 <- big_data %>% 
     mutate(raw_oxy_change = raw_oxygen - lag(raw_oxygen, n = 1)) %>% 
@@ -221,9 +224,8 @@ geom_point(data = filtered_data, aes(x = new_profile, y = ctdprs), color = "red"
 What are the odds of omitting one sample from each profile and having a similar profile if you sample x times? 
 
 ```{r}
+#there is currently not enough data for this section to work
 set.seed(23)
-#for each sample replacement # (for loop) put the sample number in one column of a df, and calculate the odds 
-#assuming the number of samples taken was more or equal to the number of sample replacements (if statement)
 df <- data.frame(odds = double(),
                     potential_sample_replacements = integer())
 for (i in 1:24) {
@@ -238,7 +240,6 @@ for (i in 1:24) {
   df <- rbind(df, data.frame(odds = res$odds, potential_sample_replacements = i))
   
   }
-#result should be a dataframe with odds and samples 1 through the maximum possible
 
 ggplot(data = df, aes(x = potential_sample_replacements, y = odds)) +
   geom_path() +
@@ -285,7 +286,7 @@ big_data2 %>%
 
 --------------------------------------------------------------------------------
 
-Does CTD data get less accurate at larger depths? --> by cruise/region probably
+Does CTD data get less accurate at larger depths?
 
 ```{r}
 ctdprs_diff_graph <- big_data2 %>% 
@@ -334,7 +335,7 @@ ggplot(region_diff_graph, aes(x = region, y = mean_percent_diff)) +
 
 --------------------------------------------------------------------------------
 
-**Mapping** THURSDAY COLIN START HERE
+**Mapping**
 
 ```{r}
 library(leaflet)
@@ -356,7 +357,7 @@ rounded_data <- big_data2 %>%
             number_of_stations = sum(station_change))
 rounded_data$number_of_stations[73] <- 1
 
-write_csv(rounded_data, "~/Desktop/NOAA/NOAA Work/Shiny Data/rounded_data.csv")
+write_csv(rounded_data, "~/Desktop/NOAA/NOAA_Repository/Shiny Data/rounded_data.csv") # --> Shiny Data --> rounded_data.csv
 ```
 
 ```{r}
@@ -393,7 +394,7 @@ sp_polygons <- SpatialPolygons(polygons)
 ```
 
 ```{r}
-rounded_data <- read_csv("~/Desktop/NOAA/NOAA Work/Shiny Data/rounded_data.csv")
+rounded_data <- read_csv("~/Desktop/NOAA/NOAA_Repository/Shiny Data/rounded_data.csv")
 ```
 
 
@@ -435,7 +436,7 @@ map <- addLegend(
     title = "Avg % Replaceable",
     labFormat = labelFormat(suffix = "%"))
 
-saveWidget(map, file = "~/Desktop/NOAA/NOAA Work/maps/map_pct_replaceable.html")
+saveWidget(map, file = "~/Desktop/NOAA/NOAA_Repository/Extras/maps/map_pct_replaceable.html")
 ```
 
 ```{r}
@@ -459,7 +460,7 @@ map_lb <- addLegend(
     title = "Avg % Replaceable(lb)",
     labFormat = labelFormat(suffix = "%"))
 
-saveWidget(map_lb, file = "~/Desktop/NOAA/NOAA Work/maps/map_pct_rep_lowerbound.html")
+saveWidget(map_lb, file = "~/Desktop/NOAA/NOAA_Repository/Extras/maps/map_pct_rep_lowerbound.html")
 ```
 
 ```{r}
@@ -482,7 +483,7 @@ map_num_rep <- addLegend(
     values = spdf$number_replacements,
     title = "Avg number Replaceable")
 
-saveWidget(map_num_rep, file = "~/Desktop/NOAA/NOAA Work/maps/map_number_of_replacements.html")
+saveWidget(map_num_rep, file = "~/Desktop/NOAA/NOAA_Repository/Extras/maps/map_number_of_replacements.html")
 ```
 
 
@@ -506,7 +507,7 @@ map_num_rep_lb <- addLegend(
     values = spdf$num_lb,
     title = "Lower Bound of Number Replaceable")
 
-saveWidget(map_num_rep_lb, file = "~/Desktop/NOAA/NOAA Work/maps/map_number_of_replacements_lowerbound.html")
+saveWidget(map_num_rep_lb, file = "~/Desktop/NOAA/NOAA_Repository/Extras/maps/map_number_of_replacements_lowerbound.html")
 ```
 
 ```{r}
@@ -529,7 +530,7 @@ map_samples <- addLegend(
     values = spdf$site_samples,
     title = "Historical Average Sample Size")
 
-saveWidget(map_samples, file = "~/Desktop/NOAA/NOAA Work/maps/map_historical_samples.html")
+saveWidget(map_samples, file = "~/Desktop/NOAA/NOAA_Repository/Extras/maps/map_historical_samples.html")
 ```
 
 ```{r}
@@ -553,7 +554,7 @@ map_min_oxy_prs <- addLegend(
     title = "Avg low oxygen depth point",
     labFormat = labelFormat(suffix = "m"))
 
-saveWidget(map_min_oxy_prs, file = "~/Desktop/NOAA/NOAA Work/maps/map_min_oxygen_depth.html")
+saveWidget(map_min_oxy_prs, file = "~/Desktop/NOAA/NOAA_Repository/Extras/maps/map_min_oxygen_depth.html")
 ```
 
 ```{r}
@@ -576,7 +577,7 @@ map_suggested <- addLegend(
     values = spdf$suggested_samples,
     title = "Suggested Number of Titrations")
 
-saveWidget(map_suggested, file = "~/Desktop/NOAA/NOAA Work/maps/map_suggestions.html")
+saveWidget(map_suggested, file = "~/Desktop/NOAA/NOAA_Repository/Extras/maps/map_suggestions.html")
 ```
 
 ```{r}
@@ -600,7 +601,7 @@ map_number_of_stations <- addLegend(
     values = spdf$number_of_stations,
     title = "n")
 
-saveWidget(map_number_of_stations, file = "~/Desktop/NOAA/NOAA Work/maps/map_number_of_stations.html")
+saveWidget(map_number_of_stations, file = "~/Desktop/NOAA/NOAA_Repository/Extras/maps/map_number_of_stations.html")
 ```
 
 ```{r}
@@ -625,7 +626,7 @@ map_depth <- addLegend(
     title = "Ocean Depth",
     labFormat = labelFormat(suffix = "m"))
 
-saveWidget(map_depth, file = "~/Desktop/NOAA/NOAA Work/maps/map_ocean_depth.html")
+saveWidget(map_depth, file = "~/Desktop/NOAA/NOAA_Repository/Extras/maps/map_ocean_depth.html")
 ```
 
 
@@ -643,6 +644,7 @@ ggplot(rounded_data, aes(y = site_samples, x = log(mean_max_depth))) +
 ```
 
 ```{r}
+#creating new data for modeling
 big_data3 <- big_data2 %>% 
   group_by(Station, cruise) %>% 
   summarize(suggested_samples = mean(samples - replaceables), max_depth = mean(max_depth), site_samples = mean(samples),
@@ -664,10 +666,12 @@ ggplot(big_data3, aes(y = percent_replaceable, x = max_depth)) +
 ```
 
 ```{r}
+#linear model for historical samples vs depth
 summary(lm(site_samples ~ log(max_depth) * cruise, data = big_data3))
 ```
 
 ```{r}
+#linear model for suggested samples vs depth
 summary(lm(suggested_samples ~ log(max_depth) * cruise, data = big_data3))
 ```
 
@@ -680,10 +684,7 @@ big_data2 %>%
   mutate(suggested = samples - replaceables) %>% 
   group_by(cruise, max_depth_bin) %>% 
   summarize(mean_suggested = round(mean(suggested)), lb_suggested = quantile(suggested, 0.95), ub_suggested = quantile(suggested, 0.05)) # how many titrations we should take is upper bound to air higher
-  
 ```
-
-
 
 $$
 Suggested = Samples - (\%Removable * Samples) \\
@@ -691,6 +692,7 @@ max = 20, min = 3
 $$
 
 ```{r}
+library(sf)
 sf <- st_as_sf(spdf)
-write_csv(sf, "~/Desktop/NOAA/NOAA Work/Shiny Data/sf.csv")
+write_csv(sf, "~/Desktop/NOAA/NOAA_Repository/Shiny Data/sf.csv") # --> Shiny Data --> sf.csv
 ```

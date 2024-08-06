@@ -5,7 +5,7 @@ date: "2024-06-12"
 ---
 
 ```{r}
-#load libraries
+#load libraries for shiny app
 library(tidyverse)
 library(readr)
 library(lubridate)
@@ -23,12 +23,14 @@ library(leaflet)
 ```
 
 ```{r}
+#load in data to app
 set.seed(12030)
-big_data <- read_csv("~/Desktop/NOAA/NOAA Work/Shiny Data/big_data.csv")
-sf <- read_csv("~/Desktop/NOAA/NOAA Work/Shiny Data/sf.csv")
+big_data <- read_csv("~/Desktop/NOAA/NOAA_Repository/Shiny Data/big_data.csv")
+sf <- read_csv("~/Desktop/NOAA/NOAA_Repository/Shiny Data/sf.csv")
 ```
 
 ```{r}
+#creates function for analysis with % threshold
 replacements_pct <- function(calibration_data, raw_data, threshold) {
  
   replaceable <- 0
@@ -51,6 +53,7 @@ replacements_pct <- function(calibration_data, raw_data, threshold) {
 ```
 
 ```{r}
+#creates function for analysis with umol/kg threshold
 replacements_unit <- function(calibration_data, raw_data, threshold) {
  
   replaceable <- 0
@@ -75,12 +78,14 @@ replacements_unit <- function(calibration_data, raw_data, threshold) {
 --------------------------------------------------------------------------------
 
 ```{r}
+#creating user interface
 ui <- dashboardPage(
   dashboardHeader(title = h4(HTML("Optimizing Ocean Oxygen Sampling"))),
   
   #set up tab system
   dashboardSidebar(
     sidebarMenu(
+      #creating tabs
       menuItem("Info", tabName = "Info", icon = icon("info-circle")),
       menuItem("Map", tabName = "Map", icon = icon("map-marked-alt")),
       menuItem("Interactive Plots", tabName = "IntPlots", icon = icon("cog")),
@@ -110,12 +115,14 @@ ui <- dashboardPage(
               
               p("In order to change the threshold from 1% to another value in umol/kg or %, feel free to edit the boxes below. All of the maps and plots in the other tabs will change based on this value once the 'Update App' button is clicked."),
               
+              #where user selects a threshold value
               box(numericInput("threshold",
                               "Select a Threshold Value",
                               min = 0, max = 100,
                               value = 1,
                               step = 0.1)),
               
+              #where user selects a unit
               box(selectInput("unit", 
                               "Select a Unit Type", 
                               c("%", "umol/kg"))),
@@ -174,16 +181,18 @@ ui <- dashboardPage(
                                 choices = names(sf)[c(3, 6, 8:9, 11:13, 16, 20)],
                                 selected = "suggested_samples"))
               )),
-      tabItem(tabName = "IntPlots", #could add a checkbox for calibration data to be included
+      tabItem(tabName = "IntPlots", 
               fluidRow(
                 box(width = 12, plotOutput("Comparison"),
+                    #where the user selects a cruise to view
                     pickerInput("Cruise", "Select a Cruise",
                                 choices = unique(big_data$cruise),
                                 selected = "WCOA 2021"),
-                    uiOutput("station_max"),
-                    checkboxInput("cal", "Include Calibrated Sensor Data", value = FALSE))
+                    uiOutput("station_max"), #references server for updated input choices
+                    checkboxInput("cal", "Include Calibrated Sensor Data", value = FALSE)) #checkbox for the inclusion of calibrated data
                 )),
       
+      #tab for plots that don't require user interaction
       tabItem(tabName = "Plots",
               fluidRow(
                 imageOutput("Coasts"),
@@ -197,8 +206,10 @@ ui <- dashboardPage(
 ```
 
 ```{r}
+#creating server
 server <- function(input, output, session) {
   
+  #updates input choices for station based on cruise
   output$station_max <- renderUI({
     
     stations <- big_data %>% 
@@ -211,6 +222,7 @@ server <- function(input, output, session) {
                                 step = 1)
   })
     
+  #updates data set based on user inputs for threshold value and units
 data_reactive <- eventReactive(input$update,{
   big_data2 <- big_data %>% 
   mutate(raw_oxy_change = raw_oxygen - lag(raw_oxygen, n = 1)) %>% 
@@ -227,6 +239,7 @@ data_reactive <- eventReactive(input$update,{
   mutate(new_profile = ifelse(random_choices, raw_oxygen, ctdoxy))
 })
 
+#more data updating
 sf_data <- reactive({
 
   
@@ -287,18 +300,16 @@ rownames(rounded_data) <- rounded_data$ID
 spdf <- SpatialPolygonsDataFrame(sp_polygons, data = rounded_data)
 
 sf <- st_as_sf(spdf)
-return(sf)
+return(sf) #returns data set for mapping based on user input for threshold value and units
 
 })
   
   
   output$map <- renderLeaflet({
     
-    if(as.character(input$var) == "suggested_samples"){
-  #creating color palette
+    if(as.character(input$var) == "suggested_samples"){ #if the variable chosen is the number of suggested samples:
 palette <- colorNumeric(palette = "YlOrRd", domain = sf_data()[[input$var]])
 
-#creating a map for the number of samples we should take (my suggestion, 95%)
 map <-leaflet(sf_data()) %>% 
   addProviderTiles(providers$OpenStreetMap) %>% 
   addPolygons(color = ~palette(sf_data()[[input$var]]),
@@ -306,7 +317,7 @@ map <-leaflet(sf_data()) %>%
               opacity = 1,
               fillOpacity = 0.7,
               fillColor = ~palette(sf_data()[[input$var]]),
-              popup = ~paste("Avg: ", round(sf_data()[[input$var]], 0), "<br> Range: ", round(sf_data()$max_suggested, 0), " to ", round(sf_data()$min_suggested, 0))) %>% 
+              popup = ~paste("Avg: ", round(sf_data()[[input$var]], 0), "<br> Range: ", round(sf_data()$max_suggested, 0), " to ",  round(sf_data()$min_suggested, 0))) %>% #then include its range
   addLegend(
     position = "bottomright",
     pal = palette,
@@ -314,11 +325,9 @@ map <-leaflet(sf_data()) %>%
     title = "Suggested Samples")
     }
     
-    else{
-        #creating color palette
+    else{ #if it is another variable:
 palette <- colorNumeric(palette = "YlOrRd", domain = sf_data()[[input$var]])
 
-#creating a map for the number of samples we should take (my suggestion, 95%)
 map <-leaflet(sf_data()) %>% 
   addProviderTiles(providers$OpenStreetMap) %>% 
   addPolygons(color = ~palette(sf_data()[[input$var]]),
@@ -326,19 +335,21 @@ map <-leaflet(sf_data()) %>%
               opacity = 1,
               fillOpacity = 0.7,
               fillColor = ~palette(sf_data()[[input$var]]),
-              popup = ~paste(round(sf_data()[[input$var]], 2))) %>% 
+              popup = ~paste(round(sf_data()[[input$var]], 2))) %>% #then create a simple and less clean map
   addLegend(
     position = "bottomright",
     pal = palette,
     values = sf_data()[[input$var]],
     title = input$var)
     }
-})
+}) 
   
+  #outputs an image of a graph I made that has no reason to be updated
 output$Coasts <- renderImage({
   list(src = "~/Desktop/NOAA/NOAA Work/Shiny Data/coasts.png")
-  }, deleteFile = FALSE)
+  }, deleteFile = FALSE) 
 
+#creates profile plots beased on user inputs for cruise, station, and whether to include calibration data or not
 output$Comparison <- renderPlot({
  # if(station is in list of stations for cruise){
   if(input$cal == FALSE){
@@ -370,12 +381,14 @@ output$Comparison <- renderPlot({
   #}
 })
 
+#creates boxplot that depends on threshold value/units
 output$boxplot <- renderPlot({
 ggplot(data = data_reactive(), aes(x = percent_replaceable, y = cruise)) +
   geom_boxplot() + 
   labs(title = "Percent Removable Samples by Cruise", x = "% Removable", y = "Cruise")
 })
 
+#creates histogram that depends on threshold value/units
 output$distribution <- renderPlot({
 ggplot(data = data_reactive(), aes(x = percent_replaceable)) +
   geom_histogram(binwidth = .05) +
@@ -387,6 +400,7 @@ ggplot(data = data_reactive(), aes(x = percent_replaceable)) +
 ```
 
 ```{r}
+#outputs a Shiny App
 shinyApp(ui, server)
 ```
 
