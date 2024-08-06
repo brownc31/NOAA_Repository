@@ -1,0 +1,37 @@
+---
+title: "East Coast Coding"
+output: pdf_document
+date: "2024-06-12"
+---
+
+
+```{r}
+#load libraries
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(readxl)
+library(purrr)
+library(plotly)
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+# Read in calibrated data
+ecoa1 <- read_csv("~/Desktop/NOAA/NOAA_Repository/ECOA/ECOA-1/ECOA-1-CLEAN.csv") # <-- ECOA-1
+ecoa2 <- read_csv("~/Desktop/NOAA/NOAA_Repository/ECOA/ECOA-2/ECOA-2-CLEAN.csv") # <-- ECOA-2
+ecoa3 <- read_csv("~/Desktop/NOAA/NOAA_Repository/ECOA/ECOA-3/ECOA-3-CLEAN.csv") # <-- ECOA-3
+```
+
+```{r}
+# Creating one full data set with all ECOA data
+ecoa_all <- rbind(ecoa1, ecoa2, ecoa3) %>% 
+  mutate(locale = rep("East", n()))
+```
+
+```{r}
+write_csv(ecoa_all, "~/Desktop/NOAA/NOAA_Repository/ECOA/ECOA-CLEAN.csv") #Write out data as a CSV file --> ECOA-CLEAN
+```
+
+--------------------------------------------------------------------------------

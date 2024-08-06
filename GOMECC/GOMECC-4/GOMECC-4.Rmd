@@ -1,0 +1,82 @@
+---
+title: "GOMECC-4"
+output: pdf_document
+date: "2024-06-12"
+---
+
+```{r}
+#load libraries
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(readxl)
+```
+
+-------------------------------------------------------------------------------
+
+```{r}
+# Cleaning column names
+gom4 <- read_excel("~/NOAA Work/Gulf of Mexico/GOMECC-4/GOMECC-4_versionJan2024.xlsx") %>% 
+  slice(-1) %>% 
+  janitor::clean_names() %>% 
+  mutate(date = dmy(str_glue("{day_utc}, {month_utc}, {year_utc}"))) %>%
+  rename(stnnbr = station_id, ctdprs = ctdpres, ctdsal = ctdsal_pss78, ctdtmp = ctdtmp_its90) %>% 
+  filter(oxygen > 0 | ctdoxy > 0) %>% 
+  filter(oxygen_flag == 1 | oxygen_flag == 2 | oxygen_flag == 6) %>% 
+  mutate(oxygen = if_else(oxygen < 0, NA, oxygen)) %>% 
+  mutate(ctdoxy = if_else(ctdoxy < 0, NA, ctdoxy)) %>%
+  select(stnnbr, oxygen, ctdoxy, latitude, longitude, ctdtmp, ctdsal, ctdprs, date) %>% 
+  mutate(cruise = rep("GOMECC4", n())) %>%
+  mutate(across(1:8, as.numeric)) 
+
+write_csv(gom4, "~/NOAA Work/Gulf of Mexico/GOMECC-4/GOMECC-4-CLEAN.csv")
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+gom4 %>% 
+  group_by(latitude, longitude) %>% 
+  count(n())
+```
+
+```{r}
+prof1 <- gom4 %>% 
+  filter(latitude == 25.002, longitude == -87.995) 
+```
+
+```{r}
+ggplot() +
+  geom_smooth(data = prof1, aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red") +
+  scale_y_reverse() +
+  xlim(0, 300) + 
+  labs(y = "depth (m)", x = "oxygen (umol/kg)")
+```                                                                 
+
+```{r}
+prof1 %>%
+    mutate(oxychange = abs(ctdoxy - lag(ctdoxy, n = 1))) %>% 
+    mutate(depthchange = abs(ctdprs - lag(ctdprs, n = 1))) %>% 
+    mutate(ROC = round(oxychange/depthchange, 3)) %>% 
+    select(ctdprs, ROC, ctdoxy) %>% 
+    arrange(desc(ctdprs))
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+ggplot() +
+  geom_smooth(data = gom4, aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red") +
+  scale_y_reverse() +
+  xlim(0, 300) +
+  labs(y = "depth (m)", x = "oxygen (umol/kg)")
+```
+
+```{r}
+mean(abs(gom4$oxygen - gom4$ctdoxy), na.rm = TRUE) # Will not work since we are missing titration data
+```
+
+
+
+
+

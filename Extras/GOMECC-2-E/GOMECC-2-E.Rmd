@@ -1,0 +1,78 @@
+---
+title: "GOMECC-2"
+output: pdf_document
+date: "2024-06-12"
+---
+
+```{r}
+#load libraries
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(readxl)
+```
+
+-------------------------------------------------------------------------------
+
+```{r}
+# Data Cleaning
+gom2_e <- read_excel("~/NOAA Work/Gulf of Mexico/GOMECC-2-GOM/GOMECC2_station_data-1.xlsx") %>% 
+  slice(-1) %>% 
+  janitor::clean_names() %>% 
+  filter(oxygen > 0 | ctdoxy > 0) %>% 
+  filter(oxygen_flag_w == 1 | oxygen_flag_w == 2 | oxygen_flag_w == 6) %>% 
+  mutate(oxygen = if_else(oxygen < 0, NA, oxygen)) %>% 
+  mutate(ctdoxy = if_else(ctdoxy < 0, NA, ctdoxy)) %>%
+  select(stnnbr, oxygen, ctdoxy, latitude, longitude, ctdtmp, ctdsal, ctdprs, date) %>% 
+  mutate(across(1:8, as.numeric)) %>% 
+  mutate(cruise = rep("GOMECC2", n())) %>%
+  filter(longitude > -81.6) # Narrows to east coast
+
+write_csv(gom2_e, "~/NOAA Work/East Coast/GOMECC-2-E/GOMECC-2-E-CLEAN.csv")
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+gom2_e %>% 
+  group_by(stnnbr) %>% 
+  count(n())
+```
+
+```{r}
+prof1 <- gom2_e %>% 
+  filter(stnnbr == 27) 
+```
+
+```{r}
+ggplot() +
+  geom_smooth(data = prof1, aes(x = oxygen, y = ctdprs), orientation = "y") +
+  geom_smooth(data = prof1, aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red") +
+  scale_y_reverse() +
+  xlim(0, 300) + 
+  labs(y = "depth (m)", x = "oxygen (umol/kg)")
+```                                                                 
+
+```{r}
+prof1 %>%
+    mutate(oxychange = abs(oxygen - lag(oxygen, n = 1))) %>% 
+    mutate(depthchange = abs(ctdprs - lag(ctdprs, n = 1))) %>% 
+    mutate(ROC = round(oxychange/depthchange, 3)) %>% 
+    select(ctdprs, ROC, oxygen)
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+ggplot() +
+  geom_smooth(data = gom2_e, aes(x = oxygen, y = ctdprs), orientation = "y") +
+  geom_smooth(data = gom2_e, aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red") +
+  scale_y_reverse() +
+  xlim(0, 300) +
+  labs(y = "depth (m)", x = "oxygen (umol/kg)")
+```
+
+```{r}
+mean(abs(gom2_e$oxygen - gom2_e$ctdoxy), na.rm = TRUE)
+```
+

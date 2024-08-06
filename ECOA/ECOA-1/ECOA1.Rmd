@@ -1,0 +1,54 @@
+---
+title: "ECOA-1"
+output: pdf_document
+date: "2024-06-12"
+---
+
+```{r}
+#load libraries for code
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(readxl)
+```
+
+-------------------------------------------------------------------------------
+
+```{r, results = 'hide'}
+#cleaning uncalibrated data for joining
+ecoa1_raw <- read_excel("~/Desktop/NOAA/NOAA_Repository/ECOA/ECOA-1/ECOA1_all_CTD_with_calibrated_umol_O2_kg.xlsx") %>% 
+  mutate(raw_oxygen = Sbeox) %>% 
+  rename(ctdprs2 = depth) %>% 
+  drop_na(Station)
+```
+
+```{r}
+#cleaning calibrated data for joining
+ecoa1 <- read_excel("~/Desktop/NOAA/NOAA_Repository/ECOA/ECOA-1/33GG20150619_GLODAP (1).xlsx") %>% 
+  slice(-1)
+
+colnames(ecoa1) <- ecoa1[1, ]
+
+ecoa1 <- ecoa1 %>% 
+  slice(-1, -2, -2502) %>% 
+  janitor::clean_names() %>% 
+  mutate(date = dmy(str_glue("{day}, {month}, {year}"))) %>% 
+  rename(Station = stnnbr) %>% 
+  mutate(across(2:37, as.numeric)) %>% 
+  mutate(ctdprs2 = round(ctdprs, 0)) %>% 
+  mutate(depth_change = ctdprs - lag(ctdprs, n = 1)) %>% 
+  filter(depth_change != 0) #removes duplicate samples
+```
+
+```{r}
+#joining data
+joined_ecoa1 <- left_join(ecoa1_raw, ecoa1, by = c("Station", "ctdprs2")) %>% 
+  mutate(oxygen = ifelse(oxygen < 0, NA, oxygen)) %>% 
+  mutate(corrected_diff = abs(ctdoxy - oxygen), uncorrected_diff = abs(raw_oxygen - oxygen), cruise = rep("ECOA 2015", n())) %>% 
+  dplyr::select(raw_oxygen, ctdtmp, ctdprs, ctdsal, oxygen, ctdoxy, Station, latitude, longitude, cruise) %>% #selects variables of interest
+  drop_na(oxygen, ctdoxy, raw_oxygen) #removes cases with missing oxygen values
+
+write_csv(joined_ecoa1, "~/Desktop/NOAA/NOAA_Repository/ECOA/ECOA-1/ECOA-1-CLEAN.csv") # --> ECOA-1-CLEAN
+```
+
+--------------------------------------------------------------------------------

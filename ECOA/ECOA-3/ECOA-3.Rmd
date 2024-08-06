@@ -1,0 +1,51 @@
+---
+title: "ECOA-3"
+output: pdf_document
+date: "2024-06-12"
+---
+
+```{r}
+#load libraries
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(readxl)
+```
+
+-------------------------------------------------------------------------------
+
+```{r, results = 'hide'}
+#cleaning uncalibrated data for joining
+ecoa3_raw <- read_excel("~/Desktop/NOAA/NOAA_Repository/ECOA/ECOA-3/ECOA3_CTD_Colin_Brown.xlsx") %>% 
+  mutate(raw_oxygen = (Oxygen_umol_kg_1 + Oxygen_umol_kg_2) / 2, latitude = round(latitude, 1), longitude = round(longitude, 1)) %>% 
+  rename(ctdprs2 = Depth_m, Station = station) %>% 
+  drop_na(Station)
+```
+
+```{r}
+#cleaning calibrated data for cleaning
+ecoa3_corrected <- read_excel("~/Desktop/NOAA/NOAA_Repository/ECOA/ECOA-3/ECOA_3_CTD_MasterDataSheet_09_26_2023.xlsx") %>% 
+   slice(-1)
+
+ecoa3_corrected <- ecoa3_corrected %>% 
+  janitor::clean_names() %>% 
+  mutate(date = dmy(str_glue("{day_utc}, {month_utc}, {year_utc}"))) %>% 
+  rename(Station = station_id,  Bottle = niskin_id, ctdprs = depth, ctdtmp = ctdtemp_its90, ctdsal = ctdsal_pss78) %>% 
+  mutate(across(3:43, as.numeric)) %>% 
+  mutate(ctdprs2 = round(ctdprs, 0), latitude = round(latitude, 1), longitude = round(longitude, 1)) %>% 
+   mutate(depth_change = ctdprs - lag(ctdprs, n = 1)) %>% 
+  filter(depth_change != 0)
+```
+
+```{r}
+#joining data
+joined_ecoa3 <- left_join(ecoa3_raw, ecoa3_corrected, by = c("Station", "ctdprs2", "latitude", "longitude")) %>% 
+  mutate(oxygen = ifelse(oxygen < 0, NA, oxygen)) %>% 
+  mutate(corrected_diff = abs(ctdoxy - oxygen), uncorrected_diff = abs(raw_oxygen - oxygen), cruise = rep("ECOA 2022", n())) %>% 
+  dplyr::select(raw_oxygen, ctdtmp, ctdprs, ctdsal, oxygen, ctdoxy, Station, latitude, longitude, cruise) %>% 
+  drop_na(oxygen, ctdoxy, raw_oxygen) 
+
+write_csv(joined_ecoa3, "~/Desktop/NOAA/NOAA_Repository/ECOA/ECOA-3/ECOA-3-CLEAN.csv") # --> ECOA-3-CLEAN
+```
+
+--------------------------------------------------------------------------------

@@ -1,0 +1,40 @@
+---
+title: "ECOA-2"
+output: pdf_document
+date: "2024-06-12"
+---
+
+```{r}
+#load libraries for code
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(readxl)
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+#ECOA2 calibrated data cleaning
+ecoa2 <- read_excel("~/Desktop/NOAA/NOAA_Repository/ECOA/ECOA-2/33HH20180625_GLODAP.xlsx") %>% 
+  slice(-1)
+
+colnames(ecoa2) <- ecoa2[1, ]
+
+ecoa2 <- ecoa2 %>% 
+  slice(-1, -2, -3277) %>% 
+  janitor::clean_names() %>% 
+  filter(oxygen > 0 | ctdoxy > 0) %>% #removing cases where calibrated and titrated data is missing
+  filter(oxygen_flag_w == 1 | oxygen_flag_w == 2 | oxygen_flag_w == 6) %>% #removing unreliable data
+  mutate(oxygen = if_else(oxygen < 0, NA, oxygen)) %>% 
+  mutate(ctdoxy = if_else(ctdoxy < 0, NA, ctdoxy)) %>%
+  mutate(date = dmy(str_glue("{day}, {month}, {year}"))) %>% 
+  select(stnnbr, oxygen, ctdoxy, latitude, longitude, ctdtmp, ctdsal, ctdprs, date) %>% #selecting variables of interest
+  mutate(cruise = rep("ECOA2", n())) %>%
+  mutate(across(1:8, as.numeric))
+
+write_csv(ecoa2, "~/Desktop/NOAA/NOAA_Repository/ECOA/ECOA-2/ECOA-2-CLEAN.csv") # --> ECOA-2-CLEAN
+```
+
+--------------------------------------------------------------------------------
+
