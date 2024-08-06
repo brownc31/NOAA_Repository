@@ -1,0 +1,37 @@
+---
+title: "WCOA-4"
+output: pdf_document
+date: "2024-06-12"
+---
+
+```{r}
+#load libraries for coding
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(readxl)
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+#cleaning calibrated WCOA 2007 data
+wcoa4 <- read_excel("~/Desktop/NOAA/NOAA_Repository/WCOA/WCOA-4/W01_WCOA2007R_djg_v2.xlsx")
+
+wcoa4 <- wcoa4 %>% 
+  mutate(date = dmy(str_glue("{DAY_UTC}, {MONTH_UTC}, {YEAR_UTC}"))) %>% 
+  janitor::clean_names() %>% 
+  rename(stnnbr = station_id, ctdprs = ctdpressure_dbar, oxygen = oxygen_umol_kg, latitude = latitude_decimal, longitude = longitude_decimal, 
+         ctdoxy = ctdoxygen_umol_kg, ctdtmp = ctdtemp_its90_deg_c, ctdsal = salinity_pss78) %>% 
+  filter(oxygen > 0 | ctdoxy > 0) %>%
+  filter(oxygen_flag == 1 | oxygen_flag == 2 | oxygen_flag == 6) %>%
+  mutate(oxygen = if_else(oxygen < 0, NA, oxygen)) %>% 
+  mutate(ctdoxy = if_else(ctdoxy < 0, NA, ctdoxy)) %>%
+  select(stnnbr, oxygen, ctdoxy, latitude, longitude, ctdtmp, ctdsal, ctdprs, date) %>% 
+  mutate(cruise = rep("WCOA 2007", n())) %>%
+  mutate(across(1:8, as.numeric))
+
+write_csv(wcoa4, "~/Desktop/NOAA/NOAA_Repository/WCOA/WCOA-4/WCOA-2007-CLEAN.csv") # --> WCOA-2007-CLEAN
+```
+
+--------------------------------------------------------------------------------

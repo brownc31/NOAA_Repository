@@ -1,0 +1,36 @@
+---
+title: "West Coast Coding"
+output: pdf_document
+date: "2024-06-12"
+---
+
+```{r}
+#load libraries
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(readxl)
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+# Read in data
+wcoa07 <- read_csv("~/Desktop/NOAA/NOAA_Repository/WCOA/WCOA-4/WCOA-2007-CLEAN.csv") # <-- WCOA-4
+wcoa11 <- read_csv("~/Desktop/NOAA/NOAA_Repository/WCOA/WCOA-5/WCOA-2-CLEAN.csv") # <-- WCOA-5
+wcoa12 <- read_csv("~/Desktop/NOAA/NOAA_Repository/WCOA/WCOA-1/WCOA-3-CLEAN.csv") # <-- WCOA-1
+wcoa13 <- read_csv("~/Desktop/NOAA/NOAA_Repository/WCOA/WCOA-2/WCOA-4-CLEAN.csv") # <-- WCOA-2
+wcoa16 <- read_csv("~/Desktop/NOAA/NOAA_Repository/WCOA/WCOA-3/WCOA-5-CLEAN.csv") # <-- WCOA-3
+wcoa21 <- read_csv("~/Desktop/NOAA/NOAA_Repository/WCOA/WCOA-6/WCOA-6-CLEAN.csv") # <-- WCOA-6
+```
+
+```{r}
+wcoa_all <- rbind(wcoa07, wcoa11, wcoa12, wcoa13, wcoa16, wcoa21) %>% 
+  mutate(locale = rep("West", n()))
+```
+
+```{r}
+write_csv(wcoa_all, "~/Desktop/NOAA/NOAA_Repository/WCOA/WEST-CLEAN.csv") # --> WEST-CLEAN
+```
+
+-------------------------------------------------------------------------------

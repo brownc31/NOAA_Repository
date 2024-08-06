@@ -15,86 +15,20 @@ library(forcats)
 --------------------------------------------------------------------------------
 
 ```{r}
-# Read in data
-gom2 <- read_csv("~/NOAA Work/Gulf of Mexico/GOMECC-2-GOM/GOMECC-2-GOM-CLEAN.csv")
-gom3 <- read_csv("~/NOAA Work/Gulf of Mexico/GOMECC-3/GOMECC-3-CLEAN.csv")
-gom4 <- read_csv("~/NOAA Work/Gulf of Mexico/GOMECC-4/GOMECC-4-CLEAN.csv")
+#read in data
+gom2 <- read_csv("~/Desktop/NOAA/NOAA_Repository/GOMECC/GOMECC-2/GOMECC-2-CLEAN.csv") # <-- GOMECC-2
+gom3 <- read_csv("~/Desktop/NOAA/NOAA_Repository/GOMECC/GOMECC-3/GOMECC-3-CLEAN.csv") # <-- GOMECC-3
+gom4 <- read_csv("~/Desktop/NOAA/NOAA_Repository/GOMECC/GOMECC-4/GOMECC-4-CLEAN.csv") # <-- GOMECC-4
 ```
 
 ```{r}
-# Creating one full dataset 
+#creating one full data set 
 gom_all <- rbind(gom2, gom3, gom4) %>% 
   mutate(locale = rep("Gulf", n()))
 ```
 
 ```{r}
-write_csv(gom_all, "~/NOAA Work/Gulf of Mexico/GOM-CLEAN.csv")
+write_csv(gom_all, "~/Desktop/NOAA/NOAA_Repository/GOMECC/GOM-CLEAN.csv") # --> GOM-CLEAN
 ```
 
 --------------------------------------------------------------------------------
-
-```{r}
-ggplot() +
-  geom_smooth(data = gom_all, aes(x = oxygen, y = ctdprs), orientation = "y") +
-  geom_smooth(data = gom_all, aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red") +
-  scale_y_reverse() +
-  xlim(0, 300) +
-  labs(y = "depth (m)", x = "oxygen (umol/kg)")
-```
-
-```{r}
-mean(abs(gom_all$oxygen - gom_all$ctdoxy), na.rm = TRUE)
-```
-
-```{r}
-bin <- gom_all %>% 
-  drop_na(stnnbr) %>% 
-  group_by(stnnbr) %>% 
-  mutate(max_depth = max(ctdprs)) %>% 
-  ungroup() %>% 
-  mutate(max_depth_bin = case_when( max_depth > 2000 & max_depth <= 6000 ~ cut(max_depth, seq(2000, 6000, by = 1000), 
-                                                                          labels = c("2001-3000", "3001-4000", "4001-5000", "5001-6000")), 
-                                    
-                                    max_depth > 500 & max_depth <= 2000 ~ cut(max_depth, seq(500, 2000, by = 250), 
-                                                                          labels = c("501-750", "751-1000", "1001-1250", "1251-1500", "1501-1750", "1751-2000")), 
-                                    
-                                    max_depth > 100 & max_depth <= 500 ~ cut(max_depth, seq(100, 500, by = 100), 
-                                                                          labels = c("101-200", "201-300", "301-400", "401-500")), 
-                                    
-                                    max_depth <= 100 ~ cut(max_depth, seq(0, 100, by = 25), 
-                                                                          labels = c("1-25", "26-50", "51-75", "76-100")), 
-                                    
-                                    TRUE ~ NA_character_ )) %>% 
-  mutate(max_depth_bin = fct_relevel(max_depth_bin, "1-25", "26-50", "51-75", "76-100", "101-200", "201-300", "301-400", "401-500", "501-750", "751-1000", "1001-1250", "1251-1500", "1501-1750", "1751-2000", "2001-3000", "3001-4000", "4001-5000", "5001-6000"))
-```
-
-```{r}
-filtered_bin <- bin %>% 
-  filter(max_depth_bin == "1-25" | max_depth_bin == "1001-1250")
-
-ggplot() +
-  geom_point(data = filtered_bin, aes(x = oxygen, y = ctdprs, color = max_depth_bin), orientation = "y") +
-  geom_smooth(data = filtered_bin, aes(x = oxygen, y = ctdprs, color = max_depth_bin), se = FALSE, orientation = "y") +
-  scale_y_reverse(limits = c(25, 0)) +
-  xlim(0, 300) +
-  labs(y = "depth (m)", x = "oxygen (umol/kg)")
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

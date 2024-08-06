@@ -1,0 +1,37 @@
+---
+title: "WCOA-1"
+output: pdf_document
+date: "2024-06-12"
+---
+
+```{r}
+#load libraries for coding
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(readxl)
+```
+
+--------------------------------------------------------------------------------
+
+```{r}
+#cleaning calibrated WCOA 2012 data
+wcoa1 <- read_excel("~/Desktop/NOAA/NOAA_Repository/WCOA/WCOA-1/Data_WCOA12_WCOA12_12-3-2014.xlsx")
+
+wcoa1 <- wcoa1 %>% 
+  janitor::clean_names() %>% 
+  rename(stnnbr = sta, ctdprs = press_db, oxygen = bot_o2_mmol_kg, latitude = lat, longitude = long, ctdoxy = ctd_oxy_mmol_kg, ctdtmp = ctd_t_c_its_90, 
+         ctdsal = ctd_salt) %>% 
+  filter(oxygen > 0 | ctdoxy > 0) %>%
+  filter(bot_o2_qc == 1 | bot_o2_qc == 2 | bot_o2_qc == 6) %>% 
+  mutate(oxygen = if_else(oxygen < 0, NA, oxygen)) %>% 
+  mutate(ctdoxy = if_else(ctdoxy < 0, NA, ctdoxy)) %>%
+  select(stnnbr, oxygen, ctdoxy, latitude, longitude, ctdtmp, ctdsal, ctdprs, date) %>% 
+  mutate(cruise = rep("WCOA 2012", n())) %>%
+  mutate(across(1:8, as.numeric))
+
+write_csv(wcoa1, "~/Desktop/NOAA/NOAA_Repository/WCOA/WCOA-1/WCOA-2012-CLEAN.csv") # --> WCOA-2012-CLEAN
+```
+
+--------------------------------------------------------------------------------
+

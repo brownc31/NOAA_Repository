@@ -5,7 +5,7 @@ date: "2024-06-12"
 ---
 
 ```{r}
-#load libraries
+#load libraries for coding
 library(tidyverse)
 library(lubridate)
 library(ggplot2)
@@ -15,68 +15,138 @@ library(readxl)
 -------------------------------------------------------------------------------
 
 ```{r}
-# Cleaning column names
-gom4 <- read_excel("~/NOAA Work/Gulf of Mexico/GOMECC-4/GOMECC-4_versionJan2024.xlsx") %>% 
+#this R chunk creates a function that can read in CNV files created by the oxygen sensors (taken from someone else's GitHub)
+
+find_coord <- function(lines){
+    # pattern definition:
+    lat_pattern <- "^\\*.* ([0-9]*\\s[0-9]*\\.[0-9]*\\s?[NS]).*"
+    lon_pattern <- "^\\*.* ([0-9]*\\s[0-9]*\\.[0-9]*\\s?[EW]).*"
+    # extract first line, that matches pattern:
+    lat_idx <- grep(lat_pattern, x = lines)[1]
+    lon_idx <- grep(lon_pattern, x = lines)[1]
+    # extract coordinates:
+    lat <- sub(lat_pattern, "\\1", lines[lat_idx])
+    lon <- sub(lon_pattern, "\\1", lines[lon_idx])
+    # return coordinates:
+    return(list("Lat" = lat, "Lon" = lon))
+}
+
+read.cnv.file <- function(filename){ #  filename as character string (e.g. "V0033F01.cnv")
+    cnv.file <- readLines(filename, encoding = "latin1") #  reads the file as large character string
+    # substitute terrible would-be-NA-values with less terrible would-be-NA-values:
+    bad.flag <- sub(".*= (.*)$", "\\1", cnv.file[grep("bad_flag", cnv.file)])
+    cnv.file <- gsub(bad.flag, " NA ", cnv.file)
+    
+    metadata <- cnv.file[grep("** ", cnv.file, fixed = TRUE)] %>%
+        str_remove_all("\\*") %>% str_squish()
+    
+    latlon <- find_coord(cnv.file)
+    
+    # cruise       <- sub(".*=(.*)", "\\1",cnv.file[grep("ReiseNr", cnv.file)])
+    # station      <- sub(".*=(.*)", "\\1",cnv.file[grep("StationNr", cnv.file)])
+    # cast         <- sub(".*=(.*)", "\\1",cnv.file[grep("EinsatzNr", cnv.file)])
+    # serie        <- sub(".*=(.*)", "\\1",cnv.file[grep("SerieNr", cnv.file)])
+    # name         <- sub(".*=(.*)", "\\1",cnv.file[grep("StatBez", cnv.file)])
+    # timestamp    <- sub(".*=(.*)", "\\1",cnv.file[grep("Startzeit", cnv.file)])
+    # bottom.depth <- sub(".* ([0-9.]*) .*$", "\\1", cnv.file[grep("Echolote", cnv.file)])
+    
+    header.definition.list <- as.list(cnv.file)[grep("# name", cnv.file)] #  find column definitions in the header, store as list
+    header.definition.df   <- data.frame( #  write column names and description in data.frame
+        colnames  = sub('.*= (.*):(.*)', '\\1', header.definition.list),
+        longnames = sub('.*= (.*):(.*)', '\\2', header.definition.list))
+    
+    header.end.position <- grep("*END*", cnv.file) #  find string '*END*' in cnv-file that marks the end of the header, thus the beginning of the data table
+    
+    # extract longitude and latitude from header - not all SBE cnv's contain columns with lon and lat
+    # position <- cnv.file[grep("GPS_Posn", cnv.file)]
+    # pos.regexp <- ".*= ([-1234567890]*) ([1234567890.]*)[NS] ([-1234567890]*) ([1234567890.]*)[EW].*"
+    # latdeg <- as.numeric(sub(pos.regexp, "\\1", position))
+    # latmin <- as.numeric(sub(pos.regexp, "\\2", position))
+    # latdec <- latdeg + latmin / 60
+    # longdeg <- as.numeric(sub(pos.regexp, "\\3", position))
+    # longmin <- as.numeric(sub(pos.regexp, "\\4", position))
+    # longdec <- longdeg + longmin / 60
+    
+    # read data table ...
+    if(length(cnv.file) > header.end.position){
+        data.frame <- read.table(text = cnv.file, #  ... from given filname ...
+                                 na.strings = c("NA"),
+                                 sep="", #  ... with whitespaces as column separator ...
+                                 dec=".", #  ... and '.' as decimal point
+                                 skip=header.end.position, #  ... skipping the header ...
+                                 col.names = header.definition.df$colnames, # ... and using the extracted column definitions as column names for the created data.frame. 
+                                 row.names = NULL,
+                                 stringsAsFactors = FALSE) 
+        
+        # add longitude and latitude from header as new columns
+        # data.frame$header.latitude <- latdec
+        # data.frame$header.longitude <- longdec
+        
+        return(list("data" = data.frame, # the function finally returns the data.frame ...
+                    "coords" = latlon,   # the extracted coordinates ...
+                    "meta" = metadata))} #  ... and the metadata
+    else{warning("cnv-file seems to contain no measurement data!")
+        return(NULL)}}
+```
+
+```{r}
+#this R chunk loads in each CNV file and then combines them into one large data set
+raw_gom4 <- tibble()
+for (i in seq(1, 1411, by = 10)){
+  try({
+  
+  if (i < 10){
+    i <- str_glue("000{i}")
+  }
+  else if (i < 100){
+    i <- str_glue("00{i}")
+  }
+  else if(i < 1000){
+    i <- str_glue("0{i}")
+  }
+  
+file <- read.cnv.file(str_glue("~/Desktop/NOAA/NOAA_Repository/GOMECC/GOMECC-4/1db/drb2103_{i}.cnv"))$data
+
+file <- file %>% 
+  mutate(Station = as.numeric(str_replace(i, "1\\b", ""))) #creates a station variable based on file name
+
+raw_gom4 <- rbind(raw_gom4, file)
+})
+}
+```
+
+```{r}
+#some minor changes being made for data joining
+#uncalibrated data
+raw_gom4 <- raw_gom4 %>% 
+  rename(ctdprs = prDM) %>% 
+  mutate(raw_oxygen = ((sbox0Mm.Kg + sbox1Mm.Kg) / 2), latitude = round(latitude, 1), longitude = round(longitude, 1))
+```
+
+
+```{r}
+#cleaning calibrated data for joining
+gom4_corrected <- read_excel("~/Desktop/NOAA/NOAA_Repository/GOMECC/GOMECC-4/GOMECC-4_versionJan2024.xlsx") %>% 
   slice(-1) %>% 
   janitor::clean_names() %>% 
   mutate(date = dmy(str_glue("{day_utc}, {month_utc}, {year_utc}"))) %>%
-  rename(stnnbr = station_id, ctdprs = ctdpres, ctdsal = ctdsal_pss78, ctdtmp = ctdtmp_its90) %>% 
-  filter(oxygen > 0 | ctdoxy > 0) %>% 
-  filter(oxygen_flag == 1 | oxygen_flag == 2 | oxygen_flag == 6) %>% 
-  mutate(oxygen = if_else(oxygen < 0, NA, oxygen)) %>% 
-  mutate(ctdoxy = if_else(ctdoxy < 0, NA, ctdoxy)) %>%
-  select(stnnbr, oxygen, ctdoxy, latitude, longitude, ctdtmp, ctdsal, ctdprs, date) %>% 
-  mutate(cruise = rep("GOMECC4", n())) %>%
-  mutate(across(1:8, as.numeric)) 
+  rename(Station = station_id, ctdprs = ctdpres, ctdsal = ctdsal_pss78, ctdtmp = ctdtmp_its90, Bottle = niskin_id) %>% 
+  mutate(across(5:52, as.numeric)) %>%
+  mutate(ctdprs = round(ctdprs, 0), latitude = round(latitude, 1), longitude = round(longitude, 1)) %>% 
+  mutate(depth_change = ctdprs - lag(ctdprs, n = 1)) %>% 
+  filter(depth_change != 0)
+```
 
-write_csv(gom4, "~/NOAA Work/Gulf of Mexico/GOMECC-4/GOMECC-4-CLEAN.csv")
+
+```{r}
+#joining data
+joined_gom4 <- left_join(raw_gom4, gom4_corrected, by = c("ctdprs", "Station", "latitude", "longitude")) %>% 
+  mutate(oxygen = ifelse(oxygen < 0, NA, oxygen)) %>% 
+  mutate(corrected_diff = abs(ctdoxy - oxygen), uncorrected_diff = abs(raw_oxygen - oxygen), cruise = rep("GOMECC 2021", n())) %>% 
+  dplyr::select(raw_oxygen, ctdtmp, ctdprs, ctdsal, oxygen, ctdoxy, Station, latitude, longitude, cruise) %>% #selecting variables of interest
+  drop_na(oxygen, ctdoxy, raw_oxygen) #removing cases with missing oxygen values
+
+write_csv(joined_gom4, "~/Desktop/NOAA/NOAA_Repository/GOMECC/GOMECC-4/GOMECC-4-CLEAN.csv") # --> GOMECC-4-CLEAN
 ```
 
 --------------------------------------------------------------------------------
-
-```{r}
-gom4 %>% 
-  group_by(latitude, longitude) %>% 
-  count(n())
-```
-
-```{r}
-prof1 <- gom4 %>% 
-  filter(latitude == 25.002, longitude == -87.995) 
-```
-
-```{r}
-ggplot() +
-  geom_smooth(data = prof1, aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red") +
-  scale_y_reverse() +
-  xlim(0, 300) + 
-  labs(y = "depth (m)", x = "oxygen (umol/kg)")
-```                                                                 
-
-```{r}
-prof1 %>%
-    mutate(oxychange = abs(ctdoxy - lag(ctdoxy, n = 1))) %>% 
-    mutate(depthchange = abs(ctdprs - lag(ctdprs, n = 1))) %>% 
-    mutate(ROC = round(oxychange/depthchange, 3)) %>% 
-    select(ctdprs, ROC, ctdoxy) %>% 
-    arrange(desc(ctdprs))
-```
-
---------------------------------------------------------------------------------
-
-```{r}
-ggplot() +
-  geom_smooth(data = gom4, aes(x = ctdoxy, y = ctdprs), orientation = "y", color = "red") +
-  scale_y_reverse() +
-  xlim(0, 300) +
-  labs(y = "depth (m)", x = "oxygen (umol/kg)")
-```
-
-```{r}
-mean(abs(gom4$oxygen - gom4$ctdoxy), na.rm = TRUE) # Will not work since we are missing titration data
-```
-
-
-
-
-
