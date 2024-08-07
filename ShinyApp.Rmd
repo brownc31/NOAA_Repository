@@ -425,11 +425,11 @@ lm_data <- reactive({
   })
 
   # Calculate the intercepts and slopes
-  wcoa_intercept <- reactive({
+  ecoa_intercept <- reactive({
     coefficients()["(Intercept)", "Estimate"]
   })
 
-  wcoa_slope <- reactive({
+  ecoa_slope <- reactive({
     coefficients()["log(max_depth)", "Estimate"]
   })
 
@@ -441,23 +441,23 @@ lm_data <- reactive({
     coefficients()["log(max_depth):cruiseGOMECC 2021", "Estimate"]
   })
 
-  ecoa_intercept <- reactive({
-    coefficients()["cruiseECOA 2022", "Estimate"]
+  wcoa_intercept <- reactive({
+    coefficients()["cruiseWCOA 2021", "Estimate"]
   })
 
-  ecoa_slope <- reactive({
-    coefficients()["log(max_depth):cruiseECOA 2022 ", "Estimate"]
+  wcoa_slope <- reactive({
+    coefficients()["log(max_depth):cruiseWCOA 2021", "Estimate"]
   })
 
   # Reactive expression for SugNum
   SugNum <- reactive({
     req(input$update)
-    if (input$Cruise2 == "WCOA 2021"){
-      SugAns <- wcoa_intercept() + (wcoa_slope() * log(input$Depth))
+    if (input$Cruise2 == "ECOA 2022"){
+      SugAns <- ecoa_intercept() + (ecoa_slope() * log(input$Depth))
     } else if (input$Cruise2 == "GOMECC 2021"){
-      SugAns <- (wcoa_intercept() + gomecc_intercept()) + ((wcoa_slope() + gomecc_slope()) * log(input$Depth))
-    } else if (input$Cruise2 == "ECOA 2022"){
-      SugAns <- (wcoa_intercept() + ecoa_intercept()) + ((wcoa_slope() + ecoa_slope()) * log(input$Depth))
+      SugAns <- (ecoa_intercept() + gomecc_intercept()) + ((ecoa_slope() + gomecc_slope()) * log(input$Depth))
+    } else if (input$Cruise2 == "WCOA 2021"){
+      SugAns <- (ecoa_intercept() + wcoa_intercept()) + ((ecoa_slope() + wcoa_slope()) * log(input$Depth))
     }
     as.character(round(SugAns, 0))
   })
