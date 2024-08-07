@@ -26,7 +26,11 @@ library(leaflet)
 #load in data to app
 set.seed(12030)
 big_data <- read_csv("~/Desktop/NOAA/NOAA_Repository/Shiny Data/big_data.csv")
-sf <- read_csv("~/Desktop/NOAA/NOAA_Repository/Shiny Data/sf.csv")
+sf <- read_csv("~/Desktop/NOAA/NOAA_Repository/Shiny Data/sf.csv") %>% 
+  rename(`Percent of Removable Titrations` = mean_percent_replaceable, `Depth of Lowest Oxygen Level` = low_oxy_depth, `Ocean Depth` = mean_max_depth,
+         `Number of Removable Titrations` = number_replacements, `Historical Number of Titrations` = site_samples, 
+         `Number of Stations` = number_of_stations, `Suggested Number of Titrations` = suggested_samples)
+big_data3 <- read_csv("~/Desktop/NOAA/NOAA_Repository/Shiny Data/LMData.csv")
 ```
 
 ```{r}
@@ -88,8 +92,9 @@ ui <- dashboardPage(
       #creating tabs
       menuItem("Info", tabName = "Info", icon = icon("info-circle")),
       menuItem("Map", tabName = "Map", icon = icon("map-marked-alt")),
-      menuItem("Interactive Plots", tabName = "IntPlots", icon = icon("cog")),
-      menuItem("Plots", tabName = "Plots", icon = icon("line-chart"))
+      menuItem("Profiles", tabName = "IntPlots", icon = icon("cog")),
+      menuItem("Plots", tabName = "Plots", icon = icon("line-chart")),
+      menuItem("Linear Modeling", tabName = "LM", icon = icon("globe-oceania"))
     )
   ),
   
@@ -126,49 +131,10 @@ ui <- dashboardPage(
               box(selectInput("unit", 
                               "Select a Unit Type", 
                               c("%", "umol/kg"))),
-              
-              actionButton("update", "Update App")
 
               ),
       
       tabItem(tabName = "Map",
-              h2("Variable Key"),
-                
-                strong("mean_percent_replaceable"), span("is the average proportion of titrations that can be removed from any given station within that area and not deviate above the threshold."),
-              
-              br(), br(),
-                 
-                strong("low_oxy_depth"), span("is the average depth where the oxygen is the lowest for any given area."),
-              
-              br(), br(),
-                
-                strong("mean_max_depth"), span("is the average depth of the stations for each area."),
-              
-              br(), br(),
-                
-                strong("number_replacements"), span("is the average number of titrations that can be removed from any given station within that area and not deviate above the threshold."),
-              
-              br(), br(),
-                
-                strong("site_samples"), span("is the average number of titrations completed for the stations of each given area. This variable is of high importance because it heavily influences the number of suggested titrations."),
-              
-              br(), br(),
-                
-                strong("lb"), span("is the 0.05 quantile of the proportion of titrations that can be removed for each area. This variable is meant to provide a very 'safe' estimate for the number of titrations that should be taken as we would rather oversample than undersample."),
-              
-              br(), br(),
-                
-                strong("num_lb"), span("is the 0.05 quantile of the number of titrations that can be removed for each area. This variable is meant to provide a very 'safe' estimate for the number of titrations that should be taken as we would rather oversample than undersample."),
-              
-              br(), br(),
-                
-                strong("number_of_stations"), span("is the number of stations within each area. This can also be viewed as 'n', the sample size."),
-              
-              br(), br(),
-                
-                strong("suggested_samples"), span("is the suggested number of titrations that should be done for each station in that area. A range is also provided with this map. suggested_samples = site_samples - (site_samples * mean_percent_replaceable)"),
-              
-              br(), br(),
               
               fluidRow(
                 
@@ -178,9 +144,12 @@ ui <- dashboardPage(
                     
                     pickerInput("var", #user chooses variable to plot
                                 "Select a Variable",
-                                choices = names(sf)[c(3, 6, 8:9, 11:13, 16, 20)],
-                                selected = "suggested_samples"))
-              )),
+                                choices = names(sf)[c(3:9)],
+                                selected = "Suggested Number of Samples"))),
+                p("This map shows the average of different variables within each area. Each box is 2 decimal degrees longitude by 2 decimal degrees latitude. This area was decided upon as an area that could be both specific and contain enough data to reach better conclusions. The average suggested number of titrations is determined by the historical average sample size minus the average number of removable titrations for each area. The range was determined by the historical average sample size minus the max/min of the number of removable titrations for each area."),
+                p("Both depth variables are measured in meters")
+              ),
+      
       tabItem(tabName = "IntPlots", 
               fluidRow(
                 box(width = 12, plotOutput("Comparison"),
@@ -190,14 +159,41 @@ ui <- dashboardPage(
                                 selected = "WCOA 2021"),
                     uiOutput("station_max"), #references server for updated input choices
                     checkboxInput("cal", "Include Calibrated Sensor Data", value = FALSE)) #checkbox for the inclusion of calibrated data
-                )),
+                ),
+              p("This interactive plot allows the user to look at specific profiles. Choose a cruise and a station in order to view that profile. Click the checkbox to include the calibrated oxygen sensor profile.")
+              ),
       
       #tab for plots that don't require user interaction
       tabItem(tabName = "Plots",
               fluidRow(
                 imageOutput("Coasts"),
-                box(width = 6, plotOutput("distribution")),
-                box(width = 6, plotOutput("boxplot"))
+                box(p("This plot shows how profiles differ based on their coastal location.")),
+                br(),
+                box(width = 12, plotOutput("distribution")),
+                box(width = 12, p("This histogram shows the distribution of what percent of titrations can be removed from all profiles. This distribution is right skewed; generally it seems about 1/4 of titrations can be removed.")),
+                br(),
+                box(width = 12, plotOutput("boxplot")),
+                box(width = 12, p("These boxplots show the distributions of removability based on coast. The main thing to note is that these boxplots have large spans, meaning there is a lot of variability in the amount of titrations that can be removed."))
+              )),
+      
+      tabItem(tabName = "LM",
+              fluidRow(
+              box(h4("What if we want to decide how many samples to take based on depth?"),
+              p("Plotting the number of historical samples taken based on the natural log of the depth of the site, we see that there are very linear relationships among the three coasts with high significance. Therefore, we can use a linear model to estimate the number of historically taken samples based on cruise and depth."),
+              p("When we look the the same relationship but with the suggested number of titrations to be taken, we get similar results (with slightly less significance, and no significance for the difference between ECOA and GOMECC cruises). Therefore, we can also estimate the number of suggested titrations to take based on cruise and depth.")),
+              box(pickerInput("Cruise2", "Select a Cruise",
+                                choices = unique(big_data$cruise),
+                                selected = "WCOA 2021"),
+                  numericInput("Depth",
+                              "Type a depth",
+                              min = 0, max = 10000,
+                              value = 500,
+                              step = 0.1),
+                  actionButton("update", "Update Answer")),
+              box(h2("The historical number of samples would be: "),
+                  textOutput("HistNum"),
+                  h2("The Suggested Number of Samples is: "),
+                  textOutput("SugNum"))
               ))
               ))
     )
@@ -209,144 +205,134 @@ ui <- dashboardPage(
 #creating server
 server <- function(input, output, session) {
   
-  #updates input choices for station based on cruise
+  # Updates input choices for station based on cruise
   output$station_max <- renderUI({
-    
     stations <- big_data %>% 
       filter(cruise == input$Cruise) %>% 
       pull(Station)
     
-     numericInput("station", "Select a Station",
-                                min = 1, max = max(stations),
-                                value = 108,
-                                step = 1)
+    numericInput("station", "Select a Station",
+                 min = 1, max = max(stations),
+                 value = 108,
+                 step = 1)
   })
-    
-  #updates data set based on user inputs for threshold value and units
-data_reactive <- eventReactive(input$update,{
-  big_data2 <- big_data %>% 
-  mutate(raw_oxy_change = raw_oxygen - lag(raw_oxygen, n = 1)) %>% 
-  filter(raw_oxy_change != 0) %>% 
-  dplyr::select(!raw_oxy_change) %>% 
-  group_by(Station, cruise) %>% 
-  mutate(replaceables = ifelse(input$unit == "%", replacements_pct(ctdoxy, raw_oxygen, input$threshold/100), replacements_unit(ctdoxy, raw_oxygen, input$threshold))) %>% 
-  mutate(percent_replaceable = replaceables / n(), samples = n()) %>% 
-  ungroup() %>% 
-  arrange(desc(samples)) %>% 
-  slice(-c(20:37)) %>% 
-  arrange(cruise, Station) %>% 
-  mutate(random_choices = runif(n()) < percent_replaceable) %>% 
-  mutate(new_profile = ifelse(random_choices, raw_oxygen, ctdoxy))
-})
-
-#more data updating
-sf_data <- reactive({
-
   
-  rounded_data <- data_reactive() %>% 
-  mutate(latitude = 2* round(latitude / 2), longitude = 2 * round(longitude / 2), station_change = ifelse(Station - lag(Station, n = 1) != 0, 1, 0)) %>% 
-  group_by(latitude, longitude) %>% 
-  summarize(mean_percent_replaceable = mean(percent_replaceable), sample_size = n(), sd_replaceable = sd(percent_replaceable),
-            low_oxy_depth = median(median(ifelse(oxygen == min(oxygen), ctdprs, NA), na.rm = TRUE)), 
-            low_oxy_depth_prop = median(low_oxy_depth / max_depth), mean_max_depth = mean(max_depth),
-            number_replacements = mean(replaceables), sd_num = sd(replaceables), site_samples = mean(samples),
-            lb = 100 * quantile(percent_replaceable, 0.05), num_lb = quantile(replaceables, 0.05), min_pct_replaceable = min(percent_replaceable), max_pct_replaceable = max(percent_replaceable),
-            number_of_stations = sum(station_change))
-rounded_data$number_of_stations[73] <- 1
+  # Updates data set based on user inputs for threshold value and units
+  data_reactive <- reactive({
+    big_data2 <- big_data %>% 
+      mutate(raw_oxy_change = raw_oxygen - lag(raw_oxygen, n = 1)) %>% 
+      filter(raw_oxy_change != 0) %>% 
+      dplyr::select(!raw_oxy_change) %>% 
+      group_by(Station, cruise) %>% 
+      mutate(replaceables = ifelse(input$unit == "%", replacements_pct(ctdoxy, raw_oxygen, input$threshold/100), replacements_unit(ctdoxy, raw_oxygen, input$threshold))) %>% 
+      mutate(percent_replaceable = replaceables / n(), samples = n()) %>% 
+      ungroup() %>% 
+      arrange(desc(samples)) %>% 
+      slice(-c(20:37)) %>% 
+      arrange(cruise, Station) %>% 
+      mutate(random_choices = runif(n()) < percent_replaceable) %>% 
+      mutate(new_profile = ifelse(random_choices, raw_oxygen, ctdoxy))
+  })
+  
+  # More data updating
+  sf_data <- reactive({
+    rounded_data <- data_reactive() %>% 
+      mutate(latitude = 2* round(latitude / 2), longitude = 2 * round(longitude / 2), 
+             station_change = ifelse(Station - lag(Station, n = 1) != 0, 1, 0)) %>% 
+      group_by(latitude, longitude) %>% 
+      summarize(`Percent of Removable Titrations` = mean(percent_replaceable), sample_size = n(), sd_replaceable = sd(percent_replaceable),
+                `Depth of Lowest Oxygen Level` = median(median(ifelse(oxygen == min(oxygen), ctdprs, NA), na.rm = TRUE)), 
+                low_oxy_depth_prop = median(`Depth of Lowest Oxygen Level` / max_depth), `Ocean Depth` = mean(max_depth),
+                `Number of Removable Titrations` = mean(replaceables), sd_num = sd(replaceables), `Historical Number of Titrations` = mean(samples),
+                lb = 100 * quantile(percent_replaceable, 0.05), num_lb = quantile(replaceables, 0.05), min_pct_replaceable = min(percent_replaceable), max_pct_replaceable = max(percent_replaceable),
+                `Number of Stations` = sum(station_change))
+    rounded_data$`Number of Stations`[73] <- 1
 
-#define range of latitudes and longitudes
-lat_range <- seq(min(rounded_data$latitude), max(rounded_data$latitude), by = 2)
-lon_range <- seq(min(rounded_data$longitude), max(rounded_data$longitude), by = 2)
+    # Define range of latitudes and longitudes
+    lat_range <- seq(min(rounded_data$latitude), max(rounded_data$latitude), by = 2)
+    lon_range <- seq(min(rounded_data$longitude), max(rounded_data$longitude), by = 2)
 
-#initialize an empty list to store polygons
-polygons <- list()
+    # Initialize an empty list to store polygons
+    polygons <- list()
 
-#create polygons
-for (lat in lat_range) {
-  for (lon in lon_range) {
-    if(any(rounded_data$latitude == lat & rounded_data$longitude == lon)) {
-    #define the coordinates of the corners of the polygon
-    coords <- matrix(c(lon - 1, lat - 1,
-                       lon + 1, lat - 1,
-                       lon + 1, lat + 1,
-                       lon - 1, lat + 1,
-                       lon - 1, lat - 1),
-                     ncol = 2, byrow = TRUE)
-    #create a polygon and add it to the list
-    polygons <- c(polygons, list(Polygons(list(Polygon(coords)), ID = paste(lat, lon))))
+    # Create polygons
+    for (lat in lat_range) {
+      for (lon in lon_range) {
+        if(any(rounded_data$latitude == lat & rounded_data$longitude == lon)) {
+          # Define the coordinates of the corners of the polygon
+          coords <- matrix(c(lon - 1, lat - 1,
+                             lon + 1, lat - 1,
+                             lon + 1, lat + 1,
+                             lon - 1, lat + 1,
+                             lon - 1, lat - 1),
+                           ncol = 2, byrow = TRUE)
+          # Create a polygon and add it to the list
+          polygons <- c(polygons, list(Polygons(list(Polygon(coords)), ID = paste(lat, lon))))
+        }
+      }
     }
-    
-    else {
-      
-    }
-  }
-}
 
-#create a SpatialPolygons object
-sp_polygons <- SpatialPolygons(polygons)
+    # Create a SpatialPolygons object
+    sp_polygons <- SpatialPolygons(polygons)
 
-#run code for formula without adjustments
-rounded_data <- rounded_data %>% 
- mutate(ID = paste(latitude, longitude), mean_pct_replaceable = 100* mean_percent_replaceable, sd = 100 * sd_replaceable, 
-        suggested_samples = ifelse((site_samples - ((mean_percent_replaceable)*site_samples)) > 20, 20, site_samples - ((mean_percent_replaceable)*site_samples)),
-        suggested_samples = ifelse((site_samples - ((mean_percent_replaceable)*site_samples)) < 3, 3, site_samples - ((mean_percent_replaceable)*site_samples)),
-        min_suggested = ifelse(site_samples - (min_pct_replaceable*site_samples) < 5, 5, site_samples - (min_pct_replaceable*site_samples)), 
-        max_suggested = ifelse(site_samples - (max_pct_replaceable*site_samples) < 3, 3, site_samples - (max_pct_replaceable*site_samples))) %>% 
+    # Run code for formula without adjustments
+    rounded_data <- rounded_data %>% 
+      mutate(ID = paste(latitude, longitude), mean_pct_removable = 100 * `Percent of Removable Titrations`, sd = 100 * sd_replaceable, 
+             `Suggested Number of Titrations` = ifelse((`Historical Number of Titrations` - ((`Percent of Removable Titrations`)*`Historical Number of Titrations`)) > 20, 20, `Historical Number of Titrations` - ((`Percent of Removable Titrations`)*`Historical Number of Titrations`)),
+             `Suggested Number of Titrations` = ifelse((`Historical Number of Titrations` - ((`Percent of Removable Titrations`)*`Historical Number of Titrations`)) < 3, 3, `Historical Number of Titrations` - ((`Percent of Removable Titrations`)*`Historical Number of Titrations`)),
+             min_suggested = ifelse(`Historical Number of Titrations` - (min_pct_replaceable*`Historical Number of Titrations`) < 5, 5, `Historical Number of Titrations` - (min_pct_replaceable*`Historical Number of Titrations`)), 
+             max_suggested = ifelse(`Historical Number of Titrations` - (max_pct_replaceable*`Historical Number of Titrations`) < 3, 3, `Historical Number of Titrations` - (max_pct_replaceable*`Historical Number of Titrations`))) %>% 
+      arrange(latitude, longitude) 
 
-  arrange(latitude, longitude)
+    rownames(rounded_data) <- rounded_data$ID
 
-rownames(rounded_data) <- rounded_data$ID
+    spdf <- SpatialPolygonsDataFrame(sp_polygons, data = rounded_data)
 
-spdf <- SpatialPolygonsDataFrame(sp_polygons, data = rounded_data)
-
-sf <- st_as_sf(spdf)
-return(sf) #returns data set for mapping based on user input for threshold value and units
-
-})
+    sf <- st_as_sf(spdf)
+    return(sf) # Returns data set for mapping based on user input for threshold value and units
+  })
   
-  
+  # Render leaflet map
   output$map <- renderLeaflet({
     
-    if(as.character(input$var) == "suggested_samples"){ #if the variable chosen is the number of suggested samples:
-palette <- colorNumeric(palette = "YlOrRd", domain = sf_data()[[input$var]])
+    if(as.character(input$var) == "Suggested Number of Titrations"){ # If the variable chosen is the number of suggested samples:
+      palette <- colorNumeric(palette = "YlOrRd", domain = sf_data()[[input$var]])
 
-map <-leaflet(sf_data()) %>% 
-  addProviderTiles(providers$OpenStreetMap) %>% 
-  addPolygons(color = ~palette(sf_data()[[input$var]]),
-              weight = 1,
-              opacity = 1,
-              fillOpacity = 0.7,
-              fillColor = ~palette(sf_data()[[input$var]]),
-              popup = ~paste("Avg: ", round(sf_data()[[input$var]], 0), "<br> Range: ", round(sf_data()$max_suggested, 0), " to ",  round(sf_data()$min_suggested, 0))) %>% #then include its range
-  addLegend(
-    position = "bottomright",
-    pal = palette,
-    values = sf_data()[[input$var]],
-    title = "Suggested Samples")
-    }
-    
-    else{ #if it is another variable:
-palette <- colorNumeric(palette = "YlOrRd", domain = sf_data()[[input$var]])
+      leaflet(sf_data()) %>% 
+        addProviderTiles(providers$OpenStreetMap) %>% 
+        addPolygons(color = ~palette(sf_data()[[input$var]]),
+                    weight = 1,
+                    opacity = 1,
+                    fillOpacity = 0.7,
+                    fillColor = ~palette(sf_data()[[input$var]]),
+                    popup = ~paste("Avg: ", round(sf_data()[[input$var]], 0), "<br> Range: ", round(sf_data()$max_suggested, 0), " to ",  round(sf_data()$min_suggested, 0))) %>% # Then include its range
+        addLegend(
+          position = "bottomright",
+          pal = palette,
+          values = sf_data()[[input$var]],
+          title = "Suggested Samples")
+    } else { # If it is another variable:
+      palette <- colorNumeric(palette = "YlOrRd", domain = sf_data()[[input$var]])
 
-map <-leaflet(sf_data()) %>% 
-  addProviderTiles(providers$OpenStreetMap) %>% 
-  addPolygons(color = ~palette(sf_data()[[input$var]]),
-              weight = 1,
-              opacity = 1,
-              fillOpacity = 0.7,
-              fillColor = ~palette(sf_data()[[input$var]]),
-              popup = ~paste(round(sf_data()[[input$var]], 2))) %>% #then create a simple and less clean map
-  addLegend(
-    position = "bottomright",
-    pal = palette,
-    values = sf_data()[[input$var]],
-    title = input$var)
+      leaflet(sf_data()) %>% 
+        addProviderTiles(providers$OpenStreetMap) %>% 
+        addPolygons(color = ~palette(sf_data()[[input$var]]),
+                    weight = 1,
+                    opacity = 1,
+                    fillOpacity = 0.7,
+                    fillColor = ~palette(sf_data()[[input$var]]),
+                    popup = ~paste("Avg: ", round(sf_data()[[input$var]], 2))) %>% # Then only include the average
+        addLegend(
+          position = "bottomright",
+          pal = palette,
+          values = sf_data()[[input$var]],
+          title = input$var)
     }
-}) 
+  })
   
   #outputs an image of a graph I made that has no reason to be updated
 output$Coasts <- renderImage({
-  list(src = "~/Desktop/NOAA/NOAA Work/Shiny Data/coasts.png")
+  list(src = "~/Desktop/NOAA/NOAA_Repository/Shiny Data/coasts.png")
   }, deleteFile = FALSE) 
 
 #creates profile plots beased on user inputs for cruise, station, and whether to include calibration data or not
@@ -393,6 +379,91 @@ output$distribution <- renderPlot({
 ggplot(data = data_reactive(), aes(x = percent_replaceable)) +
   geom_histogram(binwidth = .05) +
   labs(title = "Distribution of the Removability of Profiles", y = "Number of Profiles", x = "% Removable")
+})
+
+HistNum <- reactive({
+  req(input$update)
+  if (input$Cruise2 == "ECOA 2022"){
+  HistAns <- -1.7568 + (1.8217 * log(input$Depth))
+  as.character(round(HistAns, 0))
+  }
+  
+  else if (input$Cruise2 == "GOMECC 2021"){
+  HistAns <- 0.0412 + (1.2901 * log(input$Depth))
+  as.character(round(HistAns, 0))
+  }
+  
+  else if (input$Cruise2 == "WCOA 2021"){
+  HistAns <- -5.1696 + (3.2456 * log(input$Depth))
+  }
+  as.character(round(HistAns, 0))
+})
+
+output$HistNum <- renderText({
+  HistNum()
+})
+
+lm_data <- reactive({
+  big_data3 <- data_reactive() %>% 
+  group_by(Station, cruise) %>% 
+  summarize(suggested_samples = mean(samples - replaceables), max_depth = mean(max_depth), site_samples = mean(samples),
+            percent_replaceable = mean(percent_replaceable), mean_removable = mean(replaceables))
+})
+
+  model <- reactive({
+    lm(suggested_samples ~ log(max_depth) * cruise, data = lm_data())
+  })
+
+  # Reactive expression for the summary
+  summary_model <- reactive({
+    summary(model())
+  })
+
+  # Reactive expression for the coefficients
+  coefficients <- reactive({
+    summary_model()$coefficients
+  })
+
+  # Calculate the intercepts and slopes
+  wcoa_intercept <- reactive({
+    coefficients()["(Intercept)", "Estimate"]
+  })
+
+  wcoa_slope <- reactive({
+    coefficients()["log(max_depth)", "Estimate"]
+  })
+
+  gomecc_intercept <- reactive({
+    coefficients()["cruiseGOMECC 2021", "Estimate"]
+  })
+
+  gomecc_slope <- reactive({
+    coefficients()["log(max_depth):cruiseGOMECC 2021", "Estimate"]
+  })
+
+  ecoa_intercept <- reactive({
+    coefficients()["cruiseECOA 2022", "Estimate"]
+  })
+
+  ecoa_slope <- reactive({
+    coefficients()["log(max_depth):cruiseECOA 2022 ", "Estimate"]
+  })
+
+  # Reactive expression for SugNum
+  SugNum <- reactive({
+    req(input$update)
+    if (input$Cruise2 == "WCOA 2021"){
+      SugAns <- wcoa_intercept() + (wcoa_slope() * log(input$Depth))
+    } else if (input$Cruise2 == "GOMECC 2021"){
+      SugAns <- (wcoa_intercept() + gomecc_intercept()) + ((wcoa_slope() + gomecc_slope()) * log(input$Depth))
+    } else if (input$Cruise2 == "ECOA 2022"){
+      SugAns <- (wcoa_intercept() + ecoa_intercept()) + ((wcoa_slope() + ecoa_slope()) * log(input$Depth))
+    }
+    as.character(round(SugAns, 0))
+  })
+
+output$SugNum <- renderText({
+  SugNum()
 })
 
 }

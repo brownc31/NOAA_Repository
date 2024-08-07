@@ -1,0 +1,37 @@
+h2("Variable Key"),
+                
+                strong("mean_percent_replaceable"), span("is the average proportion of titrations that can be removed from any given station within that area and not deviate above the threshold."),
+              
+              br(), br(),
+                 
+                strong("low_oxy_depth"), span("is the average depth where the oxygen is the lowest for any given area."),
+              
+              br(), br(),
+                
+                strong("mean_max_depth"), span("is the average depth of the stations for each area."),
+              
+              br(), br(),
+                
+                strong("number_replacements"), span("is the average number of titrations that can be removed from any given station within that area and not deviate above the threshold."),
+              
+              br(), br(),
+                
+                strong("site_samples"), span("is the average number of titrations completed for the stations of each given area. This variable is of high importance because it heavily influences the number of suggested titrations."),
+              
+              br(), br(),
+                
+                strong("lb"), span("is the 0.05 quantile of the proportion of titrations that can be removed for each area. This variable is meant to provide a very 'safe' estimate for the number of titrations that should be taken as we would rather oversample than undersample."),
+              
+              br(), br(),
+                
+                strong("num_lb"), span("is the 0.05 quantile of the number of titrations that can be removed for each area. This variable is meant to provide a very 'safe' estimate for the number of titrations that should be taken as we would rather oversample than undersample."),
+              
+              br(), br(),
+                
+                strong("number_of_stations"), span("is the number of stations within each area. This can also be viewed as 'n', the sample size."),
+              
+              br(), br(),
+                
+                strong("suggested_samples"), span("is the suggested number of titrations that should be done for each station in that area. A range is also provided with this map. suggested_samples = site_samples - (site_samples * mean_percent_replaceable)"),
+              
+              br(), br(),

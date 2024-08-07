@@ -353,11 +353,15 @@ rounded_data <- big_data2 %>%
             low_oxy_depth = median(median(ifelse(oxygen == min(oxygen), ctdprs, NA), na.rm = TRUE)), 
             low_oxy_depth_prop = median(low_oxy_depth / max_depth), mean_max_depth = mean(max_depth),
             number_replacements = mean(replaceables), sd_num = sd(replaceables), site_samples = mean(samples),
-            lb = 100 * quantile(percent_replaceable, 0.05), num_lb = quantile(replaceables, 0.05), min_pct_replaceable = min(percent_replaceable), max_pct_replaceable = max(percent_replaceable),
-            number_of_stations = sum(station_change))
+            lb = 100 * quantile(percent_replaceable, 0.05), num_lb = quantile(replaceables, 0.05), min_pct_replaceable = min(percent_replaceable), 
+            max_pct_replaceable = max(percent_replaceable), number_of_stations = sum(station_change))
 rounded_data$number_of_stations[73] <- 1
 
 write_csv(rounded_data, "~/Desktop/NOAA/NOAA_Repository/Shiny Data/rounded_data.csv") # --> Shiny Data --> rounded_data.csv
+```
+
+```{r}
+rounded_data <- read_csv("~/Desktop/NOAA/NOAA_Repository/Shiny Data/rounded_data.csv")
 ```
 
 ```{r}
@@ -393,9 +397,7 @@ for (lat in lat_range) {
 sp_polygons <- SpatialPolygons(polygons)
 ```
 
-```{r}
-rounded_data <- read_csv("~/Desktop/NOAA/NOAA_Repository/Shiny Data/rounded_data.csv")
-```
+
 
 
 ```{r}
@@ -406,10 +408,14 @@ rounded_data <- rounded_data %>%
         suggested_samples = ifelse((site_samples - ((mean_percent_replaceable)*site_samples)) < 3, 3, site_samples - ((mean_percent_replaceable)*site_samples)),
         min_suggested = ifelse(site_samples - (min_pct_replaceable*site_samples) < 5, 5, site_samples - (min_pct_replaceable*site_samples)), 
         max_suggested = ifelse(site_samples - (max_pct_replaceable*site_samples) < 3, 3, site_samples - (max_pct_replaceable*site_samples))) %>% 
+  arrange(latitude, longitude) %>% 
+  dplyr::select(latitude, longitude, suggested_samples, number_replacements, mean_percent_replaceable, site_samples, number_of_stations, mean_max_depth,
+                low_oxy_depth, everything())
 
-  arrange(latitude, longitude)
 
 rownames(rounded_data) <- rounded_data$ID
+
+
 
 spdf <- SpatialPolygonsDataFrame(sp_polygons, data = rounded_data)
 ```
@@ -648,7 +654,9 @@ ggplot(rounded_data, aes(y = site_samples, x = log(mean_max_depth))) +
 big_data3 <- big_data2 %>% 
   group_by(Station, cruise) %>% 
   summarize(suggested_samples = mean(samples - replaceables), max_depth = mean(max_depth), site_samples = mean(samples),
-            percent_replaceable = mean(percent_replaceable))
+            percent_replaceable = mean(percent_replaceable), mean_removable = mean(replaceables))
+
+write_csv(big_data3, "~/Desktop/NOAA/NOAA_Repository/Shiny Data/LMData.csv")
 ```
 
 ```{r}
@@ -661,6 +669,10 @@ ggplot(big_data3, aes(y = site_samples, x = log(max_depth))) +
   geom_smooth(aes(color = cruise), method = "lm")
 
 ggplot(big_data3, aes(y = percent_replaceable, x = max_depth)) +
+  geom_point(aes(color = cruise)) +
+  geom_smooth(aes(color = cruise), method = "lm")
+
+ggplot(big_data3, aes(y = mean_removable, x = max_depth)) +
   geom_point(aes(color = cruise)) +
   geom_smooth(aes(color = cruise), method = "lm")
 ```
