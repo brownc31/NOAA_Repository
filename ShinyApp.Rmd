@@ -193,7 +193,10 @@ ui <- dashboardPage(
               box(h2("The historical number of samples would be: "),
                   textOutput("HistNum"),
                   h2("The Suggested Number of Samples is: "),
-                  textOutput("SugNum"))
+                  textOutput("SugNum")),
+              box(plotOutput("HistGraph"),
+                  br(),
+                  plotOutput("SugGraph"))
               ))
               ))
     )
@@ -464,6 +467,20 @@ lm_data <- reactive({
 
 output$SugNum <- renderText({
   SugNum()
+})
+
+output$HistGraph <- renderPlot({
+ggplot(big_data3, aes(y = site_samples, x = log(max_depth))) +
+  geom_point(aes(color = cruise)) +
+  geom_smooth(aes(color = cruise), method = "lm") +
+  labs(title = "Linear Relationships Between Historical Number of Titrations & Depth by Cruise", x = "Depth, ln(m)", y = "Historical Number of Titrations")
+})
+
+output$SugGraph <- renderPlot({
+ggplot(lm_data(), aes(y = suggested_samples, x = log(max_depth))) +
+  geom_point(aes(color = cruise)) +
+  geom_smooth(aes(color = cruise), method = "lm") +
+  labs(title = "Linear Relationships Between Suggested Number of Titrations & Depth by Cruise", x = "Depth, ln(m)", y = "Suggested Number of Titrations")
 })
 
 }
