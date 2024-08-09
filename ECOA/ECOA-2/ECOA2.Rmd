@@ -24,16 +24,37 @@ colnames(ecoa2) <- ecoa2[1, ]
 ecoa2 <- ecoa2 %>% 
   slice(-1, -2, -3277) %>% 
   janitor::clean_names() %>% 
-  filter(oxygen > 0 | ctdoxy > 0) %>% #removing cases where calibrated and titrated data is missing
-  filter(oxygen_flag_w == 1 | oxygen_flag_w == 2 | oxygen_flag_w == 6) %>% #removing unreliable data
-  mutate(oxygen = if_else(oxygen < 0, NA, oxygen)) %>% 
-  mutate(ctdoxy = if_else(ctdoxy < 0, NA, ctdoxy)) %>%
   mutate(date = dmy(str_glue("{day}, {month}, {year}"))) %>% 
-  select(stnnbr, oxygen, ctdoxy, latitude, longitude, ctdtmp, ctdsal, ctdprs, date) %>% #selecting variables of interest
-  mutate(cruise = rep("ECOA2", n())) %>%
-  mutate(across(1:8, as.numeric))
+  mutate(across(2:35, as.numeric)) %>% 
+  mutate(ctdprs2 = round(ctdprs, 0), latitude = round(latitude, 1), longitude = round(longitude, 1)) %>% 
+  rename(Station = stnnbr) %>% 
+  mutate(depth_change = ctdprs - lag(ctdprs, n = 1)) %>% 
+  filter(depth_change != 0)
+```
 
-write_csv(ecoa2, "~/Desktop/NOAA/NOAA_Repository/ECOA/ECOA-2/ECOA-2-CLEAN.csv") # --> ECOA-2-CLEAN
+```{r}
+#ECOA2 uncalibrated data cleaning
+ecoa2_raw <- read_excel("~/Desktop/NOAA/NOAA_Repository/ECOA/ECOA-2/ECOA2_master_sheet_discrete_NCEI.xlsx") %>% 
+  slice(-1) %>% 
+  janitor::clean_names() %>%
+  mutate(across(1:57, as.numeric)) %>% 
+  mutate(raw_oxygen = ctd_o2_2_conc, latitude = round(latitude, 1), longitude = round(longitude, 1)) %>% 
+  rename(ctdprs = pressure, Station = station_number) %>% 
+  drop_na(Station)
+```
+
+
+
+```{r}
+#joining data
+joined_ecoa2 <- left_join(ecoa2_raw, ecoa2, by = c("Station", "ctdprs", "oxygen")) %>% 
+  mutate(oxygen = ifelse(oxygen < 0, NA, oxygen)) %>% 
+  mutate(corrected_diff = abs(ctdoxy - oxygen), uncorrected_diff = abs(raw_oxygen - oxygen), cruise = rep("ECOA 2018", n())) %>% 
+  dplyr::select(raw_oxygen, ctdtmp, ctdprs, ctdsal, oxygen, ctdoxy, Station, latitude.x, longitude.x, cruise) %>% 
+  rename(latitude = latitude.x, longitude = longitude.x) %>% 
+  drop_na(oxygen, ctdoxy, raw_oxygen) 
+
+write_csv(joined_ecoa2, "~/Desktop/NOAA/NOAA_Repository/ECOA/ECOA-2/ECOA-2-CLEAN.csv") # --> ECOA-2-CLEAN
 ```
 
 --------------------------------------------------------------------------------

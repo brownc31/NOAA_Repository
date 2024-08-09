@@ -1,0 +1,45 @@
+  On NOAA's most recent round of ocean acidification research cruises, an average of 1290 oxygen titrations were completed. This equates to about 20 titrations a day assuming each cruises lasts 2 months. And if each titration lasts x minutes, y number of hours are being spent on oxygen titrations alone each day during a cruise. That's a lot of time spent on one measurement, especially considering we have oxygen sensors on CTDs that measure the oxygen content of the ocean for us. That being said, these sensors aren't always the most reliable, especially at deep depths. Therefore, it is necessary that we determine how many titrations we need to actually take before our data becomes unreliable. 
+  From a statistical perspective, we decided to look at this question by seeing how many titrations could be removed at random before the calibrated sensor profile deviates by more than 1% from the original calibrated sensor profile. The calibrated sensor profile is derived from an equation that involves the titration data and the raw sensor data. This profile is meant to be the "actual" oxygen profile for any given location. The lovely intern behind this project did not have the contextual knowledge or resources to utilize this equation so they decided to use a separate method when estimating the impact of removing a titration on the calibrated profile. This method assumed that when a titration was removed, the corresponding calibrated sensor profile data point would take the form of the corresponding raw sensor profile data point. Then the average difference between the profile points of the original calibrated data and the newly calibrated data was calculated to determine if a titrations could be removed. This process was repeated for each number of titrations that could be removed from the profile.
+  The findings of this analysis are displayed in an interactive Shiny App.
+  
+  
+  **File Information**
+WCOA --> Houses all code for reading and cleaning WCOA cruise data
+  West Code.Rmd --> Combines all the WCOA data into one data set
+  WCOA-6 --> WCOA 2021 reading and cleaning
+  WCOA-5 --> WCOA 2011 reading and cleaning
+  WCOA-4 --> WCOA 2007 reading and cleaning
+  WCOA-3 --> WCOA 2016 reading and cleaning
+  WCOA-2 --> WCOA 2013 reading and cleaning
+  WCOA-1 --> WCOA 2012 reading and cleaning
+  
+ShinyApp.Rmd --> Code for Shiny App interface and server
+
+Shiny Data --> Houses data and images used in the Shiny App
+  sf.csv --> Data for the variable names on the map
+  rounded_data.csv --> Data for mapping tab
+  LMData.csv --> Data for linear modeling tab
+  coasts.png --> image of the graph that shows profiles by coast
+  big_data.csv --> main data set used for nearly all the tabs in one way or another
+  
+README --> you are here
+
+RAW_CODE.Rmd --> coding work for the uncalibrated CTD sensor data; code that the shiny app is based off of
+
+NOAA_Repository.Rproj --> the R project where all of this is stored and linked to GitHub
+
+GOMECC --> Houses all code for reading and cleaning GOMECC cruise data
+  Gulf of Mexico Coding.Rmd --> Combines all the GOMECC data into one data set
+  GOMECC-4 --> GOMECC 2021 reading and cleaning
+  GOMECC-3 --> GOMECC 2017 reading and cleaning
+  GOMECC-2 --> GOMECC 2012 reading and cleaning
+  
+Extras --> Junk that is no longer relevant to the project (keeping just in case some code comes in handy)
+
+ECOA --> Houses all code for reading and cleaning ECOA cruise data
+  ECOA-3 --> ECOA 2022 reading and cleaning
+  ECOA-2 --> ECOA 2018 reading and cleaning
+  ECOA-1 --> ECOA 2015 reading and cleaning
+  EastCode.Rmd --> Combines all the ECOA data into one data set
+  EAST-CLEAN.csv --> combined data set
+  

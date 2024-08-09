@@ -178,9 +178,13 @@ ui <- dashboardPage(
       
       tabItem(tabName = "LM",
               fluidRow(
-              box(h4("What if we want to decide how many samples to take based on depth?"),
+              box(width = 12, h4("What if we want to decide how many samples to take based on depth?"),
               p("Plotting the number of historical samples taken based on the natural log of the depth of the site, we see that there are very linear relationships among the three coasts with high significance. Therefore, we can use a linear model to estimate the number of historically taken samples based on cruise and depth."),
-              p("When we look the the same relationship but with the suggested number of titrations to be taken, we get similar results (with slightly less significance, and no significance for the difference between ECOA and GOMECC cruises). Therefore, we can also estimate the number of suggested titrations to take based on cruise and depth.")),
+              p("When we look the the same relationship but with the suggested number of titrations to be taken, we get similar results (with slightly less significance, and no significance for the difference between ECOA and GOMECC cruises). Therefore, we can also estimate the number of suggested titrations to take based on cruise and depth."), 
+              br(),
+              plotOutput("HistGraph"),
+                  br(),
+                  plotOutput("SugGraph")),
               box(pickerInput("Cruise2", "Select a Cruise",
                                 choices = unique(big_data$cruise),
                                 selected = "WCOA 2021"),
@@ -193,10 +197,7 @@ ui <- dashboardPage(
               box(h2("The historical number of samples would be: "),
                   textOutput("HistNum"),
                   h2("The Suggested Number of Samples is: "),
-                  textOutput("SugNum")),
-              box(plotOutput("HistGraph"),
-                  br(),
-                  plotOutput("SugGraph"))
+                  textOutput("SugNum"))
               ))
               ))
     )
@@ -472,14 +473,14 @@ output$SugNum <- renderText({
 output$HistGraph <- renderPlot({
 ggplot(big_data3, aes(y = site_samples, x = log(max_depth))) +
   geom_point(aes(color = cruise)) +
-  geom_smooth(aes(color = cruise), method = "lm") +
+  geom_smooth(aes(color = cruise), method = "lm", se = FALSE) +
   labs(title = "Linear Relationships Between Historical Number of Titrations & Depth by Cruise", x = "Depth, ln(m)", y = "Historical Number of Titrations")
 })
 
 output$SugGraph <- renderPlot({
 ggplot(lm_data(), aes(y = suggested_samples, x = log(max_depth))) +
   geom_point(aes(color = cruise)) +
-  geom_smooth(aes(color = cruise), method = "lm") +
+  geom_smooth(aes(color = cruise), method = "lm", se = FALSE) +
   labs(title = "Linear Relationships Between Suggested Number of Titrations & Depth by Cruise", x = "Depth, ln(m)", y = "Suggested Number of Titrations")
 })
 
