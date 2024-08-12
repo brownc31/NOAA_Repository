@@ -20,6 +20,7 @@ library(shinyWidgets)
 library(raster)
 library(sf)
 library(leaflet)
+library(DT)
 ```
 
 ```{r}
@@ -31,6 +32,19 @@ sf <- read_csv("~/Desktop/NOAA/NOAA_Repository/Shiny Data/sf.csv") %>%
          `Number of Removable Titrations` = number_replacements, `Historical Number of Titrations` = site_samples, 
          `Number of Stations` = number_of_stations, `Suggested Number of Titrations` = suggested_samples)
 big_data3 <- read_csv("~/Desktop/NOAA/NOAA_Repository/Shiny Data/LMData.csv")
+```
+
+```{r}
+#create data set for map of station locations
+stn_location <- big_data %>% 
+  group_by(cruise, Station) %>% 
+  summarize(latitude = mean(latitude), longitude = mean(longitude))
+
+#create icon for map
+ship <- makeIcon(
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Maki2-ferry-18.svg/480px-Maki2-ferry-18.svg.png",
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Maki2-ferry-18.svg/18px-Maki2-ferry-18.svg.png",
+    18, 18)
 ```
 
 ```{r}
@@ -94,7 +108,8 @@ ui <- dashboardPage(
       menuItem("Map", tabName = "Map", icon = icon("map-marked-alt")),
       menuItem("Profiles", tabName = "IntPlots", icon = icon("cog")),
       menuItem("Plots", tabName = "Plots", icon = icon("line-chart")),
-      menuItem("Linear Modeling", tabName = "LM", icon = icon("globe-oceania"))
+      menuItem("Linear Modeling", tabName = "LM", icon = icon("globe-oceania")),
+      menuItem("Data", tabName = "Data", icon = icon("folder-blank"))
     )
   ),
   
@@ -105,10 +120,10 @@ ui <- dashboardPage(
               
               h2("Background"),
               
-              p("NOAA leads annual ocean acidification research cruises in locations surrounding the USA. This analysis specifically focuses on the ECOA 2022, WCOA 2021, and GOMECC 2021 cruises which take place in the East Coast, West Coast, and Gulf of Mexico respectively. This omits cruises in the Alaska, Arctic, and Pacific Islands. On each cruise two types of oxygen samples are taken. \n 
-                1. samples from the CTD oxygen sensor that provides data for a full oxygen profile, which is to say continuous data. \n 
-                2. titration samples from the bottles attached to the CTD. These bottles collect water samples at various depths which are used for calculating the amount of dissolved oxygen via titration. \n
-                Although more accurate, the titration data is time-costly and consumes resources compared to the sensor data which is much more efficient to collect. Therefore it is important that we only take as many titrations as necessary to recieve accurate enough data. This app provides the findings from this analysis in a clear and interpretable way in order for simple usage by cruise personnel."),
+              p("NOAA leads annual ocean acidification research cruises in locations surrounding the USA. This analysis specifically focuses on the ECOA 2022, WCOA 2021, and GOMECC 2021 cruises which take place in the East Coast, West Coast, and Gulf of Mexico respectively. This omits cruises in the Alaska, Arctic, and Pacific Islands. On each cruise two types of oxygen samples are taken."),
+              p("1. samples from the CTD oxygen sensor that provides data for a full oxygen profile, which is to say continuous data."),
+              p("2. titration samples from the bottles attached to the CTD. These bottles collect water samples at various depths which are used for calculating the amount of dissolved oxygen via titration."),
+              p("Although more accurate, the titration data is time-costly and consumes resources compared to the sensor data which is much more efficient to collect. Therefore it is important that we only take as many titrations as necessary to recieve accurate enough data. This app provides the findings from this analysis in a clear and interpretable way in order for simple usage by cruise personnel."),
               
               h2("Data"),
               
@@ -118,7 +133,7 @@ ui <- dashboardPage(
               
               p("The number of titrations that could be replaced was estimated through calculating how many raw CTD sensor data points in any given profile could be replaced with the calibrated data points before the profile deviated by 1% or more. Then a suggested number of titrations was calculated by subtracting that number from the historical sample size of any given station. These results are visualized in an interactive map seen in the Map tab. Other findings are shown in the plotiing tabs (interactive plots and plots)."),
               
-              p("In order to change the threshold from 1% to another value in umol/kg or %, feel free to edit the boxes below. All of the maps and plots in the other tabs will change based on this value once the 'Update App' button is clicked."),
+              p("In order to change the threshold from 1% to another value in umol/kg or %, feel free to edit the boxes below. All of the maps and plots in the other tabs will change based on this value."),
               
               #where user selects a threshold value
               box(numericInput("threshold",
@@ -158,9 +173,10 @@ ui <- dashboardPage(
                                 choices = unique(big_data$cruise),
                                 selected = "WCOA 2021"),
                     uiOutput("station_max"), #references server for updated input choices
-                    checkboxInput("cal", "Include Calibrated Sensor Data", value = FALSE)) #checkbox for the inclusion of calibrated data
+                    checkboxInput("cal", "Include Calibrated Sensor Data", value = FALSE)), #checkbox for the inclusion of calibrated data
+                box(width = 12, leafletOutput("stations", height = 500))
                 ),
-              p("This interactive plot allows the user to look at specific profiles. Choose a cruise and a station in order to view that profile. Click the checkbox to include the calibrated oxygen sensor profile.")
+              p("This interactive plot allows the user to look at specific profiles. Choose a cruise and a station in order to view that profile. Click the checkbox to include the calibrated oxygen sensor profile. Use the map to reference where stations are.")
               ),
       
       #tab for plots that don't require user interaction
@@ -198,6 +214,14 @@ ui <- dashboardPage(
                   textOutput("HistNum"),
                   h2("The Suggested Number of Samples is: "),
                   textOutput("SugNum"))
+              )),
+      
+      tabItem(tabName = "Data",
+              fluidRow(
+                box(width = 12, 
+                    h4("To use numeric column filters, type: '1...5' to filter to values in that column ranging from 1 to 5."),
+                    br(),
+                    DT::dataTableOutput("data"))
               ))
               ))
     )
@@ -371,6 +395,12 @@ output$Comparison <- renderPlot({
   #}
 })
 
+output$stations <- renderLeaflet({
+  leaflet(stn_location) %>% 
+        addProviderTiles(providers$OpenStreetMap) %>% 
+        addMarkers(~longitude, ~latitude, label = ~paste(Station), icon = ship)
+})
+
 #creates boxplot that depends on threshold value/units
 output$boxplot <- renderPlot({
 ggplot(data = data_reactive(), aes(x = percent_replaceable, y = cruise)) +
@@ -482,6 +512,13 @@ ggplot(lm_data(), aes(y = suggested_samples, x = log(max_depth))) +
   geom_point(aes(color = cruise)) +
   geom_smooth(aes(color = cruise), method = "lm", se = FALSE) +
   labs(title = "Linear Relationships Between Suggested Number of Titrations & Depth by Cruise", x = "Depth, ln(m)", y = "Suggested Number of Titrations")
+})
+
+output$data <- DT::renderDataTable(filter = "top", rownames = FALSE, {
+  lm_data() %>% 
+    dplyr::select(cruise, Station, max_depth, site_samples, suggested_samples) %>% 
+    rename(Cruise = cruise, `Station Depth` = max_depth, `Historical Titrations` = site_samples, `Suggested Titrations` = suggested_samples) %>% 
+    mutate(Cruise = as.factor(Cruise))
 })
 
 }
