@@ -38,13 +38,30 @@ big_data3 <- read_csv("~/Desktop/NOAA/NOAA_Repository/Shiny Data/LMData.csv")
 #create data set for map of station locations
 stn_location <- big_data %>% 
   group_by(cruise, Station) %>% 
-  summarize(latitude = mean(latitude), longitude = mean(longitude))
+  summarize(latitude = mean(latitude), longitude = mean(longitude)) %>% 
+  mutate(cruise = as.factor(cruise))
 
-#create icon for map
-ship <- makeIcon(
-    "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Maki2-ferry-18.svg/480px-Maki2-ferry-18.svg.png",
-    "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Maki2-ferry-18.svg/18px-Maki2-ferry-18.svg.png",
-    18, 18)
+#creating icon for map
+icons <- iconList(
+  `WCOA 2021` = makeIcon(
+   "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Tracking_ship_icon_blue.svg/600px-Tracking_ship_icon_blue.svg.png",
+   "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Tracking_ship_icon_blue.svg/100px-Tracking_ship_icon_blue.svg.png",
+    18,
+    18
+  ),
+  `GOMECC 2021` = makeIcon(
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Tracking_ship_icon_orange.svg/600px-Tracking_ship_icon_orange.svg.png",
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Tracking_ship_icon_orange.svg/100px-Tracking_ship_icon_orange.svg.png",
+    18,
+    18
+  ),
+  `ECOA 2022` = makeIcon(
+"https://upload.wikimedia.org/wikipedia/commons/thumb/b/bb/Tracking_ship_icon_green.svg/600px-Tracking_ship_icon_green.svg.png",
+"https://upload.wikimedia.org/wikipedia/commons/thumb/b/bb/Tracking_ship_icon_green.svg/100px-Tracking_ship_icon_green.svg.png",
+    18,
+    18
+  )
+)
 ```
 
 ```{r}
@@ -146,6 +163,19 @@ ui <- dashboardPage(
               box(selectInput("unit", 
                               "Select a Unit Type", 
                               c("%", "umol/kg"))),
+              
+              h2("App Overview"),
+              
+              span("The"), strong("Map"), span("tab contains an interactive map where the user can look at different variables based on location. Some variables include: the suggested number of titrations to be done, the historical number of titrations done, and the ocean depth."),
+              br(),
+              span("The"), strong("Profiles"), span("tab allows the user to look at oxygen profiles by selecting the cruise and station of interest. Users have access to the titration profile, the raw sensor profile, and the calibrated sensor profile. An interactive map is also provided showing where each station is geographically."),
+              br(),
+              span("The"), strong("Plots"), span("tab shows some non-interactive graphs. One graph shows how profiles change by region. The other two show the distribution of the removability of titrations which will update depending on the threshold value."),
+              br(),
+              span("The"), strong("Linear Modeling"), span("tab shows the results of modeling the suggested and historical titration sample sizes based on depth. The user can select a cruise and a depth, and the model will output the estimated historical number of titrations and the estimated suggested number of titrations."),
+              br(),
+              span("The"), strong("Data"), span("tab allows the user to interact with the data and see view specific numbers and relationships. There are 5 variables included: cruise, station, station depth, suggested titrations, and historical titrations."),
+              
 
               ),
       
@@ -176,7 +206,7 @@ ui <- dashboardPage(
                     checkboxInput("cal", "Include Calibrated Sensor Data", value = FALSE)), #checkbox for the inclusion of calibrated data
                 box(width = 12, leafletOutput("stations", height = 500))
                 ),
-              p("This interactive plot allows the user to look at specific profiles. Choose a cruise and a station in order to view that profile. Click the checkbox to include the calibrated oxygen sensor profile. Use the map to reference where stations are.")
+              p("This interactive plot allows the user to look at specific profiles. Choose a cruise and a station in order to view that profile. Click the checkbox to include the calibrated oxygen sensor profile. Use the map to reference where stations are. Blue is WCOA, orange is GOMECC, and green is ECOA.")
               ),
       
       #tab for plots that don't require user interaction
@@ -398,7 +428,7 @@ output$Comparison <- renderPlot({
 output$stations <- renderLeaflet({
   leaflet(stn_location) %>% 
         addProviderTiles(providers$OpenStreetMap) %>% 
-        addMarkers(~longitude, ~latitude, label = ~paste(Station), icon = ship)
+        addMarkers(~longitude, ~latitude, label = ~paste(Station), icon = ~icons[cruise])
 })
 
 #creates boxplot that depends on threshold value/units
