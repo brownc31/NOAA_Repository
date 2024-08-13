@@ -1,10 +1,3 @@
----
-title: "App Development Teehee"
-output: pdf_document
-date: "2024-06-12"
----
-
-```{r}
 #load libraries for shiny app
 library(tidyverse)
 library(readr)
@@ -21,20 +14,16 @@ library(raster)
 library(sf)
 library(leaflet)
 library(DT)
-```
 
-```{r}
 #load in data to app
 set.seed(12030)
-big_data <- read_csv("~/Desktop/NOAA/NOAA_Repository/Shiny Data/big_data.csv")
-sf <- read_csv("~/Desktop/NOAA/NOAA_Repository/Shiny Data/sf.csv") %>% 
+big_data <- read_csv("Shiny Data/big_data.csv")
+sf <- read_csv("Shiny Data/sf.csv") %>% 
   rename(`Percent of Removable Titrations` = mean_percent_replaceable, `Depth of Lowest Oxygen Level` = low_oxy_depth, `Ocean Depth` = mean_max_depth,
          `Number of Removable Titrations` = number_replacements, `Historical Number of Titrations` = site_samples, 
          `Number of Stations` = number_of_stations, `Suggested Number of Titrations` = suggested_samples)
-big_data3 <- read_csv("~/Desktop/NOAA/NOAA_Repository/Shiny Data/LMData.csv")
-```
+big_data3 <- read_csv("Shiny Data/LMData.csv")
 
-```{r}
 #create data set for map of station locations
 stn_location <- big_data %>% 
   group_by(cruise, Station) %>% 
@@ -44,8 +33,8 @@ stn_location <- big_data %>%
 #creating icon for map
 icons <- iconList(
   `WCOA 2021` = makeIcon(
-   "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Tracking_ship_icon_blue.svg/600px-Tracking_ship_icon_blue.svg.png",
-   "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Tracking_ship_icon_blue.svg/100px-Tracking_ship_icon_blue.svg.png",
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Tracking_ship_icon_blue.svg/600px-Tracking_ship_icon_blue.svg.png",
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Tracking_ship_icon_blue.svg/100px-Tracking_ship_icon_blue.svg.png",
     18,
     18
   ),
@@ -56,18 +45,16 @@ icons <- iconList(
     18
   ),
   `ECOA 2022` = makeIcon(
-"https://upload.wikimedia.org/wikipedia/commons/thumb/b/bb/Tracking_ship_icon_green.svg/600px-Tracking_ship_icon_green.svg.png",
-"https://upload.wikimedia.org/wikipedia/commons/thumb/b/bb/Tracking_ship_icon_green.svg/100px-Tracking_ship_icon_green.svg.png",
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bb/Tracking_ship_icon_green.svg/600px-Tracking_ship_icon_green.svg.png",
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bb/Tracking_ship_icon_green.svg/100px-Tracking_ship_icon_green.svg.png",
     18,
     18
   )
 )
-```
 
-```{r}
 #creates function for analysis with % threshold
 replacements_pct <- function(calibration_data, raw_data, threshold) {
- 
+  
   replaceable <- 0
   
   
@@ -85,12 +72,10 @@ replacements_pct <- function(calibration_data, raw_data, threshold) {
   
   return(replaceable)
 }
-```
 
-```{r}
 #creates function for analysis with umol/kg threshold
 replacements_unit <- function(calibration_data, raw_data, threshold) {
- 
+  
   replaceable <- 0
   
   
@@ -108,11 +93,7 @@ replacements_unit <- function(calibration_data, raw_data, threshold) {
   
   return(replaceable)
 }
-```
 
---------------------------------------------------------------------------------
-
-```{r}
 #creating user interface
 ui <- dashboardPage(
   dashboardHeader(title = h4(HTML("Optimizing Ocean Oxygen Sampling"))),
@@ -154,10 +135,10 @@ ui <- dashboardPage(
               
               #where user selects a threshold value
               box(numericInput("threshold",
-                              "Select a Threshold Value",
-                              min = 0, max = 100,
-                              value = 1,
-                              step = 0.1)),
+                               "Select a Threshold Value",
+                               min = 0, max = 100,
+                               value = 1,
+                               step = 0.1)),
               
               #where user selects a unit
               box(selectInput("unit", 
@@ -176,8 +157,8 @@ ui <- dashboardPage(
               br(),
               span("The"), strong("Data"), span("tab allows the user to interact with the data and view specific numbers and relationships. There are 5 variables included: cruise, station, station depth, suggested titrations, and historical titrations."),
               
-
-              ),
+              
+      ),
       
       tabItem(tabName = "Map",
               
@@ -191,9 +172,9 @@ ui <- dashboardPage(
                                 "Select a Variable",
                                 choices = names(sf)[c(3:9)],
                                 selected = "Suggested Number of Samples"))),
-                p("This map shows the average of different variables within each area. Each box is 2 decimal degrees longitude by 2 decimal degrees latitude. This area was decided upon as an area that could be both specific and contain enough data to reach better conclusions. The average suggested number of titrations is determined by the historical average sample size minus the average number of removable titrations for each area. The range was determined by the historical average sample size minus the max/min of the number of removable titrations for each area."),
-                p("Both depth variables are measured in meters")
-              ),
+              p("This map shows the average of different variables within each area. Each box is 2 decimal degrees longitude by 2 decimal degrees latitude. This area was decided upon as an area that could be both specific and contain enough data to reach better conclusions. The average suggested number of titrations is determined by the historical average sample size minus the average number of removable titrations for each area. The range was determined by the historical average sample size minus the max/min of the number of removable titrations for each area."),
+              p("Both depth variables are measured in meters")
+      ),
       
       tabItem(tabName = "IntPlots", 
               fluidRow(
@@ -205,9 +186,9 @@ ui <- dashboardPage(
                     uiOutput("station_max"), #references server for updated input choices
                     checkboxInput("cal", "Include Calibrated Sensor Data", value = FALSE)), #checkbox for the inclusion of calibrated data
                 box(width = 12, leafletOutput("stations", height = 500))
-                ),
-              p("This interactive plot allows the user to look at specific profiles. Choose a cruise and a station in order to view that profile. Click the checkbox to include the calibrated oxygen sensor profile. Use the map to reference where stations are. Blue is WCOA, orange is GOMECC, and green is ECOA.")
               ),
+              p("This interactive plot allows the user to look at specific profiles. Choose a cruise and a station in order to view that profile. Click the checkbox to include the calibrated oxygen sensor profile. Use the map to reference where stations are. Blue is WCOA, orange is GOMECC, and green is ECOA.")
+      ),
       
       #tab for plots that don't require user interaction
       tabItem(tabName = "Plots",
@@ -224,26 +205,26 @@ ui <- dashboardPage(
       
       tabItem(tabName = "LM",
               fluidRow(
-              box(width = 12, h4("What if we want to decide how many samples to take based on depth?"),
-              p("Plotting the number of historical samples taken based on the natural log of the depth of the site, we see that there are very linear relationships among the three coasts with high significance. Therefore, we can use a linear model to estimate the number of historically taken samples based on cruise and depth."),
-              p("When we look the the same relationship but with the suggested number of titrations to be taken, we get similar results (with slightly less significance, and no significance for the difference between ECOA and GOMECC cruises). Therefore, we can also estimate the number of suggested titrations to take based on cruise and depth."), 
-              br(),
-              plotOutput("HistGraph"),
-                  br(),
-                  plotOutput("SugGraph")),
-              box(pickerInput("Cruise2", "Select a Cruise",
+                box(width = 12, h4("What if we want to decide how many samples to take based on depth?"),
+                    p("Plotting the number of historical samples taken based on the natural log of the depth of the site, we see that there are very linear relationships among the three coasts with high significance. Therefore, we can use a linear model to estimate the number of historically taken samples based on cruise and depth."),
+                    p("When we look the the same relationship but with the suggested number of titrations to be taken, we get similar results (with slightly less significance, and no significance for the difference between ECOA and GOMECC cruises). Therefore, we can also estimate the number of suggested titrations to take based on cruise and depth."), 
+                    br(),
+                    plotOutput("HistGraph"),
+                    br(),
+                    plotOutput("SugGraph")),
+                box(pickerInput("Cruise2", "Select a Cruise",
                                 choices = unique(big_data$cruise),
                                 selected = "WCOA 2021"),
-                  numericInput("Depth",
-                              "Type a depth",
-                              min = 0, max = 10000,
-                              value = 500,
-                              step = 0.1),
-                  actionButton("update", "Update Answer")),
-              box(h2("The historical number of samples would be: "),
-                  textOutput("HistNum"),
-                  h2("The Suggested Number of Samples is: "),
-                  textOutput("SugNum"))
+                    numericInput("Depth",
+                                 "Type a depth",
+                                 min = 0, max = 10000,
+                                 value = 500,
+                                 step = 0.1),
+                    actionButton("update", "Update Answer")),
+                box(h2("The historical number of samples would be: "),
+                    textOutput("HistNum"),
+                    h2("The Suggested Number of Samples is: "),
+                    textOutput("SugNum"))
               )),
       
       tabItem(tabName = "Data",
@@ -253,13 +234,9 @@ ui <- dashboardPage(
                     br(),
                     DT::dataTableOutput("data"))
               ))
-              ))
-    )
-  
-  
-```
+    ))
+)
 
-```{r}
 #creating server
 server <- function(input, output, session) {
   
@@ -305,14 +282,14 @@ server <- function(input, output, session) {
                 lb = 100 * quantile(percent_replaceable, 0.05), num_lb = quantile(replaceables, 0.05), min_pct_replaceable = min(percent_replaceable), max_pct_replaceable = max(percent_replaceable),
                 `Number of Stations` = sum(station_change))
     rounded_data$`Number of Stations`[73] <- 1
-
+    
     # Define range of latitudes and longitudes
     lat_range <- seq(min(rounded_data$latitude), max(rounded_data$latitude), by = 2)
     lon_range <- seq(min(rounded_data$longitude), max(rounded_data$longitude), by = 2)
-
+    
     # Initialize an empty list to store polygons
     polygons <- list()
-
+    
     # Create polygons
     for (lat in lat_range) {
       for (lon in lon_range) {
@@ -329,10 +306,10 @@ server <- function(input, output, session) {
         }
       }
     }
-
+    
     # Create a SpatialPolygons object
     sp_polygons <- SpatialPolygons(polygons)
-
+    
     # Run code for formula without adjustments
     rounded_data <- rounded_data %>% 
       mutate(ID = paste(latitude, longitude), mean_pct_removable = 100 * `Percent of Removable Titrations`, sd = 100 * sd_replaceable, 
@@ -341,11 +318,11 @@ server <- function(input, output, session) {
              min_suggested = ifelse(`Historical Number of Titrations` - (min_pct_replaceable*`Historical Number of Titrations`) < 5, 5, `Historical Number of Titrations` - (min_pct_replaceable*`Historical Number of Titrations`)), 
              max_suggested = ifelse(`Historical Number of Titrations` - (max_pct_replaceable*`Historical Number of Titrations`) < 3, 3, `Historical Number of Titrations` - (max_pct_replaceable*`Historical Number of Titrations`))) %>% 
       arrange(latitude, longitude) 
-
+    
     rownames(rounded_data) <- rounded_data$ID
-
+    
     spdf <- SpatialPolygonsDataFrame(sp_polygons, data = rounded_data)
-
+    
     sf <- st_as_sf(spdf)
     return(sf) # Returns data set for mapping based on user input for threshold value and units
   })
@@ -355,7 +332,7 @@ server <- function(input, output, session) {
     
     if(as.character(input$var) == "Suggested Number of Titrations"){ # If the variable chosen is the number of suggested samples:
       palette <- colorNumeric(palette = "YlOrRd", domain = sf_data()[[input$var]])
-
+      
       leaflet(sf_data()) %>% 
         addProviderTiles(providers$OpenStreetMap) %>% 
         addPolygons(color = ~palette(sf_data()[[input$var]]),
@@ -371,7 +348,7 @@ server <- function(input, output, session) {
           title = "Suggested Samples")
     } else { # If it is another variable:
       palette <- colorNumeric(palette = "YlOrRd", domain = sf_data()[[input$var]])
-
+      
       leaflet(sf_data()) %>% 
         addProviderTiles(providers$OpenStreetMap) %>% 
         addPolygons(color = ~palette(sf_data()[[input$var]]),
@@ -389,130 +366,130 @@ server <- function(input, output, session) {
   })
   
   #outputs an image of a graph I made that has no reason to be updated
-output$Coasts <- renderImage({
-  list(src = "~/Desktop/NOAA/NOAA_Repository/Shiny Data/coasts.png")
+  output$Coasts <- renderImage({
+    list(src = "Shiny Data/coasts.png")
   }, deleteFile = FALSE) 
-
-#creates profile plots beased on user inputs for cruise, station, and whether to include calibration data or not
-output$Comparison <- renderPlot({
- # if(station is in list of stations for cruise){
-  if(input$cal == FALSE){
-  data_reactive() %>% 
-  filter(cruise == input$Cruise & Station == input$station) %>% 
-  ggplot() +
-  geom_point(aes(x = raw_oxygen, y = ctdprs), color  = "darkblue") +
-  geom_line(aes(x = raw_oxygen, y = ctdprs), color  = "darkblue", orientation = "y") +
-  geom_point(aes(x = oxygen, y = ctdprs), color = "red") +
-  geom_line(aes(x = oxygen, y = ctdprs), color = "red", orientation = "y") +
-  scale_y_reverse() + 
-  labs(title = "Raw Sensor Profile (Blue) Vs Titration Profile (Red)", x = "Oxygen (umol/kg)", y = "Depth (m)", caption = str_glue("{input$Cruise}, {input$station}"))
-  }
-  else{
-  data_reactive() %>% 
-  filter(cruise == input$Cruise & Station == input$station) %>% 
-  ggplot() +
-  geom_point(aes(x = raw_oxygen, y = ctdprs), color  = "darkblue") +
-  geom_line(aes(x = raw_oxygen, y = ctdprs), color  = "darkblue", orientation = "y") +
-  geom_point(aes(x = oxygen, y = ctdprs), color = "red") +
-  geom_line(aes(x = oxygen, y = ctdprs), color = "red", orientation = "y") +
-  geom_point(aes(x = ctdoxy, y = ctdprs), color = "darkgreen") +
-  geom_line(aes(x = ctdoxy, y = ctdprs), color = "darkgreen", orientation = "y") +
-  scale_y_reverse() + 
-  labs(title = "Raw Sensor Profile (Blue) Vs Titration Profile (Red) Vs Calibrated Sensor Profile (Green)", x = "Oxygen (umol/kg)", y = "Depth (m)", caption = str_glue("{input$Cruise}, {input$station}"))  
-  }
-  #else{
+  
+  #creates profile plots beased on user inputs for cruise, station, and whether to include calibration data or not
+  output$Comparison <- renderPlot({
+    # if(station is in list of stations for cruise){
+    if(input$cal == FALSE){
+      data_reactive() %>% 
+        filter(cruise == input$Cruise & Station == input$station) %>% 
+        ggplot() +
+        geom_point(aes(x = raw_oxygen, y = ctdprs), color  = "darkblue") +
+        geom_line(aes(x = raw_oxygen, y = ctdprs), color  = "darkblue", orientation = "y") +
+        geom_point(aes(x = oxygen, y = ctdprs), color = "red") +
+        geom_line(aes(x = oxygen, y = ctdprs), color = "red", orientation = "y") +
+        scale_y_reverse() + 
+        labs(title = "Raw Sensor Profile (Blue) Vs Titration Profile (Red)", x = "Oxygen (umol/kg)", y = "Depth (m)", caption = str_glue("{input$Cruise}, {input$station}"))
+    }
+    else{
+      data_reactive() %>% 
+        filter(cruise == input$Cruise & Station == input$station) %>% 
+        ggplot() +
+        geom_point(aes(x = raw_oxygen, y = ctdprs), color  = "darkblue") +
+        geom_line(aes(x = raw_oxygen, y = ctdprs), color  = "darkblue", orientation = "y") +
+        geom_point(aes(x = oxygen, y = ctdprs), color = "red") +
+        geom_line(aes(x = oxygen, y = ctdprs), color = "red", orientation = "y") +
+        geom_point(aes(x = ctdoxy, y = ctdprs), color = "darkgreen") +
+        geom_line(aes(x = ctdoxy, y = ctdprs), color = "darkgreen", orientation = "y") +
+        scale_y_reverse() + 
+        labs(title = "Raw Sensor Profile (Blue) Vs Titration Profile (Red) Vs Calibrated Sensor Profile (Green)", x = "Oxygen (umol/kg)", y = "Depth (m)", caption = str_glue("{input$Cruise}, {input$station}"))  
+    }
+    #else{
     #print(str_glue("{input$station} does not exist for this cruise"))
-  #}
-})
-
-output$stations <- renderLeaflet({
-  leaflet(stn_location) %>% 
-        addProviderTiles(providers$OpenStreetMap) %>% 
-        addMarkers(~longitude, ~latitude, label = ~paste(Station), icon = ~icons[cruise])
-})
-
-#creates boxplot that depends on threshold value/units
-output$boxplot <- renderPlot({
-ggplot(data = data_reactive(), aes(x = percent_replaceable, y = cruise)) +
-  geom_boxplot() + 
-  labs(title = "Percent Removable Samples by Cruise", x = "% Removable", y = "Cruise")
-})
-
-#creates histogram that depends on threshold value/units
-output$distribution <- renderPlot({
-ggplot(data = data_reactive(), aes(x = percent_replaceable)) +
-  geom_histogram(binwidth = .05) +
-  labs(title = "Distribution of the Removability of Profiles", y = "Number of Profiles", x = "% Removable")
-})
-
-HistNum <- reactive({
-  req(input$update)
-  if (input$Cruise2 == "ECOA 2022"){
-  HistAns <- -1.7568 + (1.8217 * log(input$Depth))
-  as.character(round(HistAns, 0))
-  }
+    #}
+  })
   
-  else if (input$Cruise2 == "GOMECC 2021"){
-  HistAns <- 0.0412 + (1.2901 * log(input$Depth))
-  as.character(round(HistAns, 0))
-  }
+  output$stations <- renderLeaflet({
+    leaflet(stn_location) %>% 
+      addProviderTiles(providers$OpenStreetMap) %>% 
+      addMarkers(~longitude, ~latitude, label = ~paste(Station), icon = ~icons[cruise])
+  })
   
-  else if (input$Cruise2 == "WCOA 2021"){
-  HistAns <- -5.1696 + (3.2456 * log(input$Depth))
-  }
-  as.character(round(HistAns, 0))
-})
-
-output$HistNum <- renderText({
-  HistNum()
-})
-
-lm_data <- reactive({
-  big_data3 <- data_reactive() %>% 
-  group_by(Station, cruise) %>% 
-  summarize(suggested_samples = mean(samples - replaceables), max_depth = mean(max_depth), site_samples = mean(samples),
-            percent_replaceable = mean(percent_replaceable), mean_removable = mean(replaceables))
-})
-
+  #creates boxplot that depends on threshold value/units
+  output$boxplot <- renderPlot({
+    ggplot(data = data_reactive(), aes(x = percent_replaceable, y = cruise)) +
+      geom_boxplot() + 
+      labs(title = "Percent Removable Samples by Cruise", x = "% Removable", y = "Cruise")
+  })
+  
+  #creates histogram that depends on threshold value/units
+  output$distribution <- renderPlot({
+    ggplot(data = data_reactive(), aes(x = percent_replaceable)) +
+      geom_histogram(binwidth = .05) +
+      labs(title = "Distribution of the Removability of Profiles", y = "Number of Profiles", x = "% Removable")
+  })
+  
+  HistNum <- reactive({
+    req(input$update)
+    if (input$Cruise2 == "ECOA 2022"){
+      HistAns <- -1.7568 + (1.8217 * log(input$Depth))
+      as.character(round(HistAns, 0))
+    }
+    
+    else if (input$Cruise2 == "GOMECC 2021"){
+      HistAns <- 0.0412 + (1.2901 * log(input$Depth))
+      as.character(round(HistAns, 0))
+    }
+    
+    else if (input$Cruise2 == "WCOA 2021"){
+      HistAns <- -5.1696 + (3.2456 * log(input$Depth))
+    }
+    as.character(round(HistAns, 0))
+  })
+  
+  output$HistNum <- renderText({
+    HistNum()
+  })
+  
+  lm_data <- reactive({
+    big_data3 <- data_reactive() %>% 
+      group_by(Station, cruise) %>% 
+      summarize(suggested_samples = mean(samples - replaceables), max_depth = mean(max_depth), site_samples = mean(samples),
+                percent_replaceable = mean(percent_replaceable), mean_removable = mean(replaceables))
+  })
+  
   model <- reactive({
     lm(suggested_samples ~ log(max_depth) * cruise, data = lm_data())
   })
-
+  
   # Reactive expression for the summary
   summary_model <- reactive({
     summary(model())
   })
-
+  
   # Reactive expression for the coefficients
   coefficients <- reactive({
     summary_model()$coefficients
   })
-
+  
   # Calculate the intercepts and slopes
   ecoa_intercept <- reactive({
     coefficients()["(Intercept)", "Estimate"]
   })
-
+  
   ecoa_slope <- reactive({
     coefficients()["log(max_depth)", "Estimate"]
   })
-
+  
   gomecc_intercept <- reactive({
     coefficients()["cruiseGOMECC 2021", "Estimate"]
   })
-
+  
   gomecc_slope <- reactive({
     coefficients()["log(max_depth):cruiseGOMECC 2021", "Estimate"]
   })
-
+  
   wcoa_intercept <- reactive({
     coefficients()["cruiseWCOA 2021", "Estimate"]
   })
-
+  
   wcoa_slope <- reactive({
     coefficients()["log(max_depth):cruiseWCOA 2021", "Estimate"]
   })
-
+  
   # Reactive expression for SugNum
   SugNum <- reactive({
     req(input$update)
@@ -525,38 +502,35 @@ lm_data <- reactive({
     }
     as.character(round(SugAns, 0))
   })
-
-output$SugNum <- renderText({
-  SugNum()
-})
-
-output$HistGraph <- renderPlot({
-ggplot(big_data3, aes(y = site_samples, x = log(max_depth))) +
-  geom_point(aes(color = cruise)) +
-  geom_smooth(aes(color = cruise), method = "lm", se = FALSE) +
-  labs(title = "Linear Relationships Between Historical Number of Titrations & Depth by Cruise", x = "Depth, ln(m)", y = "Historical Number of Titrations")
-})
-
-output$SugGraph <- renderPlot({
-ggplot(lm_data(), aes(y = suggested_samples, x = log(max_depth))) +
-  geom_point(aes(color = cruise)) +
-  geom_smooth(aes(color = cruise), method = "lm", se = FALSE) +
-  labs(title = "Linear Relationships Between Suggested Number of Titrations & Depth by Cruise", x = "Depth, ln(m)", y = "Suggested Number of Titrations")
-})
-
-output$data <- DT::renderDataTable(filter = "top", rownames = FALSE, {
-  lm_data() %>% 
-    dplyr::select(cruise, Station, max_depth, site_samples, suggested_samples) %>% 
-    rename(Cruise = cruise, `Station Depth` = max_depth, `Historical Titrations` = site_samples, `Suggested Titrations` = suggested_samples) %>% 
-    mutate(Cruise = as.factor(Cruise))
-})
-
+  
+  output$SugNum <- renderText({
+    SugNum()
+  })
+  
+  output$HistGraph <- renderPlot({
+    ggplot(big_data3, aes(y = site_samples, x = log(max_depth))) +
+      geom_point(aes(color = cruise)) +
+      geom_smooth(aes(color = cruise), method = "lm", se = FALSE) +
+      labs(title = "Linear Relationships Between Historical Number of Titrations & Depth by Cruise", x = "Depth, ln(m)", y = "Historical Number of Titrations")
+  })
+  
+  output$SugGraph <- renderPlot({
+    ggplot(lm_data(), aes(y = suggested_samples, x = log(max_depth))) +
+      geom_point(aes(color = cruise)) +
+      geom_smooth(aes(color = cruise), method = "lm", se = FALSE) +
+      labs(title = "Linear Relationships Between Suggested Number of Titrations & Depth by Cruise", x = "Depth, ln(m)", y = "Suggested Number of Titrations")
+  })
+  
+  output$data <- DT::renderDataTable(filter = "top", rownames = FALSE, {
+    lm_data() %>% 
+      dplyr::select(cruise, Station, max_depth, site_samples, suggested_samples) %>% 
+      rename(Cruise = cruise, `Station Depth` = max_depth, `Historical Titrations` = site_samples, `Suggested Titrations` = suggested_samples) %>% 
+      mutate(Cruise = as.factor(Cruise))
+  })
+  
 }
 
-```
-
-```{r}
 #outputs a Shiny App
 shinyApp(ui, server)
-```
+
 

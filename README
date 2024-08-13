@@ -1,10 +1,21 @@
-  On NOAA's most recent round of ocean acidification research cruises, an average of 1290 oxygen titrations were completed. This equates to about 20 titrations a day assuming each cruises lasts 2 months. And if each titration lasts x minutes, y number of hours are being spent on oxygen titrations alone each day during a cruise. That's a lot of time spent on one measurement, especially considering we have oxygen sensors on CTDs that measure the oxygen content of the ocean for us. That being said, these sensors aren't always the most reliable, especially at deep depths. Therefore, it is necessary that we determine how many titrations we need to actually take before our data becomes unreliable. 
+  On NOAA's most recent round of ocean acidification research cruises, an average of 1290 oxygen titrations were completed. This equates to about 32 titrations a day assuming each cruises lasts about 40 days. And if each titration lasts up to 10 minutes, about 5 hours are being spent on oxygen titrations alone each day during a cruise. That's a lot of time spent on one measurement, especially considering we have oxygen sensors on CTDs that measure the oxygen content of the ocean for us. That being said, these sensors aren't always the most reliable, especially at deep depths. Therefore, it is necessary that we determine how many titrations we need to actually take before our data becomes unreliable. 
   From a statistical perspective, we decided to look at this question by seeing how many titrations could be removed at random before the calibrated sensor profile deviates by more than 1% from the original calibrated sensor profile. The calibrated sensor profile is derived from an equation that involves the titration data and the raw sensor data. This profile is meant to be the "actual" oxygen profile for any given location. The lovely intern behind this project did not have the contextual knowledge or resources to utilize this equation so they decided to use a separate method when estimating the impact of removing a titration on the calibrated profile. This method assumed that when a titration was removed, the corresponding calibrated sensor profile data point would take the form of the corresponding raw sensor profile data point. Then the average difference between the profile points of the original calibrated data and the newly calibrated data was calculated to determine if a titrations could be removed. This process was repeated for each number of titrations that could be removed from the profile.
   The limitations of this analysis are important to consider as there is a lot of variance due to a lack of data and oceanographic characteristics. It is also important to note that we cannot predict the future. The number of titrations we should have taken in 2021 might be different than the number we should take in 2025. That being said, some estimate is better than none.
   The findings of this analysis are displayed in an interactive Shiny App.
   
   
   **File Information**
+app_directory --> Where all the files needed for the app to run is held, including the app code itself
+  app.R --> Code file for app transferred and adapted from ShinyApp.Rmd
+  rsconnect --> files needed for shinyapps.io to house the app
+  Shiny Data --> Houses data and images used in the Shiny App
+    big_data.csv --> main data set used for nearly all the tabs in one way or another
+    coasts.png --> image of the graph that shows profiles by coast
+    LMData.csv --> Data for linear modeling tab
+    rounded_data.csv --> Data for mapping tab
+    sf.csv --> Data for the variable names on the map
+  
+
 ECOA --> Houses all code for reading and cleaning ECOA cruise data
   EAST-CLEAN.csv --> combined data set
   EastCode.Rmd --> Combines all the ECOA data into one data set
@@ -25,13 +36,6 @@ NOAA_Repository.Rproj --> the R project where all of this is stored and linked t
 RAW_CODE.Rmd --> coding work for the uncalibrated CTD sensor data; code that the shiny app is based off of
 
 README --> you are here
-
-Shiny Data --> Houses data and images used in the Shiny App
-  big_data.csv --> main data set used for nearly all the tabs in one way or another
-  coasts.png --> image of the graph that shows profiles by coast
-  LMData.csv --> Data for linear modeling tab
-  rounded_data.csv --> Data for mapping tab
-  sf.csv --> Data for the variable names on the map
 
 ShinyApp.Rmd --> Code for Shiny App interface and server
   

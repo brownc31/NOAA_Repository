@@ -1,0 +1,10 @@
+name: app_directory
+title:
+username: noaa-oap
+account: noaa-oap
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 12448210
+bundleId: 8978730
+url: https://noaa-oap.shinyapps.io/app_directory/
+version: 1
