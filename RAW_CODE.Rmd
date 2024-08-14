@@ -194,7 +194,7 @@ ggplot(data = big_data2, aes(x = percent_replaceable)) +
 
 ```{r}
 set.seed(3421)
-#creates profiles made under randomization process
+# creates profiles made under randomization process
 big_data2 <- big_data2 %>% 
   mutate(random_choices = runif(n()) < percent_replaceable) %>% 
   mutate(new_profile = ifelse(random_choices, raw_oxygen, ctdoxy))
