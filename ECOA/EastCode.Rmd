@@ -13,6 +13,10 @@ library(ggplot2)
 library(readxl)
 library(purrr)
 library(plotly)
+library(dplyr)
+library(sp)
+library(leaflet)
+library(sf)
 ```
 
 --------------------------------------------------------------------------------
@@ -35,3 +39,195 @@ write_csv(ecoa_all, "~/Desktop/NOAA/NOAA_Repository/ECOA/ECOA-CLEAN.csv") #Write
 ```
 
 --------------------------------------------------------------------------------
+
+```{r}
+#suggested samples function
+set.seed(12030)
+replacements <- function(calibration_data, raw_data, threshold) {
+ 
+  replaceable <- 0
+  
+  
+  for (i in 1:length(calibration_data)) {
+    new_data <- calibration_data
+    index <- sample(1:length(calibration_data), i)
+    new_data[index] <- raw_data[index]
+    
+    if (mean(abs((new_data - calibration_data) / calibration_data)) <= threshold) {
+      replaceable <- replaceable + 1
+      
+    }
+    
+  }
+  
+  return(replaceable)
+}
+```
+
+```{r}
+ecoa <- ecoa_all %>% 
+  group_by(Station, cruise) %>% 
+  mutate(samples = n(), suggested = samples - replacements(ctdoxy, raw_oxygen, 0.01), pct_removable = replacements(ctdoxy, raw_oxygen, 0.01) / n())
+```
+
+```{r}
+ecoa_avg <- ecoa %>% 
+  group_by(Station, cruise) %>% 
+  summarize(samples = mean(samples), suggested = mean(suggested), pct_removable = mean(pct_removable), latitude = round(mean(latitude)), longitude = round(mean(longitude)))
+
+
+ggplot(ecoa_avg, aes(x = cruise, y = samples, color = cruise)) +
+  geom_boxplot()
+
+ggplot(ecoa_avg, aes(x = cruise, y = suggested, color = cruise)) +
+  geom_boxplot()
+
+ggplot(ecoa_avg, aes(x = cruise, y = pct_removable, color = cruise)) +
+  geom_boxplot()
+```
+
+```{r}
+ggplot() +
+ geom_point(data = ecoa, aes(x = oxygen, y = ctdprs, color = cruise)) +
+ #geom_smooth(data = big_data, aes(x = oxygen, y = ctdprs, color = cruise), se = FALSE, orientation = "y") +
+ scale_y_reverse() +
+ labs(title = "Oxygen Levels based on Depth and Location", y = "Depth (m)", x = "Oxygen (umol/kg)")
+```
+
+
+--------------------------------------------------------------------------------
+
+```{r}
+res_aov <- aov(pct_removable ~ cruise,
+  data = ecoa_avg
+)
+
+hist(res_aov$residuals)
+```
+
+```{r}
+summary(res_aov)
+```
+
+What if we just look at 2015 and 2022?
+
+```{r}
+ecoa_filtered <- ecoa_avg %>% 
+  filter(cruise != "ECOA 2018")
+```
+
+```{r}
+res_aov2 <- aov(pct_removable ~ cruise,
+  data = ecoa_filtered
+)
+
+hist(res_aov$residuals)
+```
+
+```{r}
+summary(res_aov2)
+```
+Barely not significant (p > 0.05). No diff between 2015 and 2022, but there is a significant diff in 2018.
+Seems like time doesn't really have a strong effect. Has more to do with technology and personnel I am guessing.
+
+--------------------------------------------------------------------------------
+**Mapping**
+
+```{r}
+ecoa_avg2 <- ecoa_avg %>% 
+  mutate(latitude = 2* round(latitude / 2), longitude = 2 * round(longitude / 2)) %>% 
+  group_by(latitude, longitude) %>% 
+  summarize(suggested = mean(suggested), samples = mean(samples), pct_removable = mean(pct_removable), latitude = mean(latitude), longitude = mean(longitude))
+  
+#define range of latitudes and longitudes
+lat_range <- seq(min(ecoa_avg2$latitude), max(ecoa_avg2$latitude), by = 2)
+lon_range <- seq(min(ecoa_avg2$longitude), max(ecoa_avg2$longitude), by = 2)
+
+#initialize an empty list to store polygons
+polygons <- list()
+
+#create polygons
+for (lat in lat_range) {
+  for (lon in lon_range) {
+    if(any(ecoa_avg2$latitude == lat & ecoa_avg2$longitude == lon)) {
+    #define the coordinates of the corners of the polygon
+    coords <- matrix(c(lon - 1, lat - 1,
+                       lon + 1, lat - 1,
+                       lon + 1, lat + 1,
+                       lon - 1, lat + 1,
+                       lon - 1, lat - 1),
+                     ncol = 2, byrow = TRUE)
+    #create a polygon and add it to the list
+    polygons <- c(polygons, list(Polygons(list(Polygon(coords)), ID = paste(lat, lon))))
+    }
+    
+    else {
+      
+    }
+  }
+}
+
+#create a SpatialPolygons object
+sp_polygons <- SpatialPolygons(polygons)
+```
+
+
+
+
+```{r}
+#run code for formula without adjustments
+ecoa_avg2 <- ecoa_avg2 %>% 
+  arrange(latitude, longitude) %>% 
+  dplyr::select(latitude, longitude, suggested, pct_removable, samples) %>% 
+  mutate(ID = paste(latitude, longitude))
+
+
+rownames(ecoa_avg2) <- ecoa_avg2$ID
+
+
+
+spdf_ecoa <- SpatialPolygonsDataFrame(sp_polygons, data = ecoa_avg2)
+```
+
+```{r}
+#creating color palette
+palette_suggested <- colorNumeric(palette = "YlOrRd", domain = spdf_ecoa$suggested)
+
+#creating a map for the number of samples we should take (my suggestion, 95%)
+map_suggested <-leaflet(spdf_ecoa) %>% 
+  addProviderTiles(providers$OpenStreetMap) %>% 
+  addPolygons(color = ~palette_suggested(suggested),
+              weight = 1,
+              opacity = 1,
+              fillOpacity = 0.7,
+              fillColor = ~palette_suggested(suggested),
+              popup = ~paste("Avg: ", round(suggested, 0)))
+map_suggested <- addLegend(
+    map = map_suggested,
+    position = "bottomright",
+    pal = palette_suggested,
+    values = spdf_ecoa$suggested,
+    title = "Suggested Number of Titrations")
+
+map_suggested
+```
+
+The extra data creates less variance in the average number of suggested samples across the coast.
+--------------------------------------------------------------------------------
+
+How do the oxygen levels themselves change?
+
+```{r}
+ecoa %>% 
+  group_by(cruise) %>% 
+  summarize(mean = mean(oxygen))
+
+ggplot(ecoa, aes(x = cruise, y = oxygen, color = cruise)) +
+  geom_boxplot()
+```
+
+
+
+
+
+

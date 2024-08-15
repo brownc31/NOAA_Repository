@@ -1,7 +1,7 @@
   On NOAA's most recent round of ocean acidification research cruises, an average of 1290 oxygen titrations were completed. This equates to about 32 titrations a day assuming each cruises lasts about 40 days. And if each titration lasts up to 10 minutes, about 5 hours are being spent on oxygen titrations alone each day during a cruise. That's a lot of time spent on one measurement, especially considering we have oxygen sensors on CTDs that measure the oxygen content of the ocean for us. That being said, these sensors aren't always the most reliable, especially at deep depths. Therefore, it is necessary that we determine how many titrations we need to actually take before our data becomes unreliable. 
   From a statistical perspective, we decided to look at this question by seeing how many titrations could be removed at random before the calibrated sensor profile deviates by more than 1% from the original calibrated sensor profile. The calibrated sensor profile is derived from an equation that involves the titration data and the raw sensor data. This profile is meant to be the "actual" oxygen profile for any given location. The lovely intern behind this project did not have the contextual knowledge or resources to utilize this equation so they decided to use a separate method when estimating the impact of removing a titration on the calibrated profile. This method assumed that when a titration was removed, the corresponding calibrated sensor profile data point would take the form of the corresponding raw sensor profile data point. Then the average difference between the profile points of the original calibrated data and the newly calibrated data was calculated to determine if a titrations could be removed. This process was repeated for each number of titrations that could be removed from the profile.
   The limitations of this analysis are important to consider as there is a lot of variance due to a lack of data and oceanographic characteristics. It is also important to note that we cannot predict the future. The number of titrations we should have taken in 2021 might be different than the number we should take in 2025. That being said, some estimate is better than none.
-  The findings of this analysis are displayed in an interactive Shiny App.
+  The findings of this analysis are displayed in an interactive Shiny App. Note that in the profiles tab some stations for some cruises are missing. In this case, the graph will appear blank (i.e. ECOA 2022, station 108).
   
   
   **File Information**
@@ -18,7 +18,7 @@ app_directory --> Where all the files needed for the app to run is held, includi
 
 ECOA --> Houses all code for reading and cleaning ECOA cruise data
   EAST-CLEAN.csv --> combined data set
-  EastCode.Rmd --> Combines all the ECOA data into one data set
+  EastCode.Rmd --> Combines all the ECOA data into one data set, and looks at oxygen levels and titrations across time
   ECOA-1 --> ECOA 2015 reading and cleaning
   ECOA-2 --> ECOA 2018 reading and cleaning
   ECOA-3 --> ECOA 2022 reading and cleaning
@@ -49,7 +49,12 @@ WCOA --> Houses all code for reading and cleaning WCOA cruise data
   West Code.Rmd --> Combines all the WCOA data into one data set
   
 
-
+  **Integrating Additional Data**
+    In order to integrate additional data, from past or future cruises, I suggest following the organizational structure used in this repository. For example, if GOMECC-2025 data comes around, we create a new folder in the GOMECC folder called GOMECC-5. And if we acquire the raw data for GOMECC 2017, use the ECOA rmds as a reference on how to join that data with the existing data. 
+    See the individual ECOA Rmds on how to join raw oxygen and calibrated oxygen Excel data. See the GOMECC-4 rmd to read in CNV files and combine them with existing csv/excel data. See WCOA-6 on how to read in btl files and combine them with existing csv/excel data. 
+    If the goal is to integrate more data into the ShinyApp, I suggest reworking the data the app depends on so that the data is in the same format (same columns), but includes all of the new data as well as the old. Then using dplyr::filter() and 
+shiny::checkboxInput(), you can change the displayed data based on whether the user wants to include data based on certain years. This may especially come in handy on the map as more data will likely smooth out the variance in suggested titrations between locations. 
+  Based on an analysis involving past ECOA data, time does not have a significant impact on the number of titrations suggested, but does reduce some variance in the mapping results.
   
 
 
